@@ -1,7 +1,7 @@
 import { motion } from "framer-motion";
 import { Section } from "@/components/Section";
 import { ShimmerOverlay } from "@/components/Shimmer";
-import { sectionMount, staggerContainer, staggerItem } from "@/lib/motionVariants";
+import { sectionMount } from "@/lib/motionVariants";
 import type { AIAnalysis } from "@/types/analysis";
 
 interface CritiqueSectionProps {
@@ -17,6 +17,12 @@ const SECTION_DESCRIPTION =
 
 const LABEL_CLASS =
   "mb-3 block border-b border-border pb-2 font-mono text-[10px] uppercase tracking-widest text-subtle";
+
+/** Card label — same type scale as LABEL_CLASS but no underline (the card's
+ * #fafafa fill and the 1px grid gaps already frame it). */
+const CARD_LABEL = "mb-3 font-mono text-[10px] uppercase tracking-widest text-subtle";
+
+const TAG_PILL = "bg-tag-bg px-2 py-0.5 font-mono text-[10px] text-muted";
 
 export function CritiqueSection({
   ai,
@@ -70,24 +76,30 @@ function CritiqueContent({ ai }: { ai: AIAnalysis }) {
     : [];
   const hasAnySetting = settingsValues.length > 0;
 
+  const crit = ai.composition_critique;
+  const strengths = crit?.strengths ?? [];
+  const improvements = crit?.improvements ?? [];
+  const hasCards =
+    Boolean(ai.subject?.primary || ai.subject?.description) ||
+    Boolean(ai.lighting?.direction || ai.lighting?.summary) ||
+    strengths.length > 0 ||
+    improvements.length > 0;
+
   return (
     <div>
+      {/* a) SCENE — one line, tags below */}
       {ai.scene && (ai.scene.summary || ai.scene.tags.length > 0) && (
         <>
           <div>
             {ai.scene.summary && (
-              <p className="max-w-3xl font-display text-2xl italic leading-relaxed text-text md:text-3xl">
+              <p className="font-display text-xl leading-relaxed text-text">
                 {ai.scene.summary}
               </p>
             )}
-            <div className="mt-4 inline-flex flex-wrap items-center gap-2">
-              {ai.scene.setting && (
-                <span className="bg-tag-bg px-2 py-0.5 font-mono text-[10px] text-muted">
-                  {ai.scene.setting}
-                </span>
-              )}
+            <div className="mt-3 inline-flex flex-wrap items-center gap-2">
+              {ai.scene.setting && <span className={TAG_PILL}>{ai.scene.setting}</span>}
               {ai.scene.tags.map((tag) => (
-                <span key={tag} className="bg-tag-bg px-2 py-0.5 font-mono text-[10px] text-muted">
+                <span key={tag} className={TAG_PILL}>
                   {tag}
                 </span>
               ))}
@@ -97,49 +109,54 @@ function CritiqueContent({ ai }: { ai: AIAnalysis }) {
         </>
       )}
 
-      {((ai.subject && (ai.subject.primary || ai.subject.description)) ||
-        (ai.lighting && (ai.lighting.summary || ai.lighting.direction))) && (
+      {/* b) 2x2 card grid — gap-px over a border-colored bg draws the 1px
+          lines between the four touching cards. */}
+      {hasCards && (
         <>
-          <motion.div
-            variants={staggerContainer}
-            initial="hidden"
-            animate="show"
-            className="grid gap-8 sm:grid-cols-2 sm:divide-x sm:divide-border"
-          >
-            {ai.subject && (ai.subject.primary || ai.subject.description) && (
-              <motion.div variants={staggerItem} className="sm:pr-8">
-                <span className={LABEL_CLASS}>Subject</span>
-                {ai.subject.primary && (
-                  <h3 className="font-display text-xl text-text">{ai.subject.primary}</h3>
-                )}
-                {ai.subject.description && (
-                  <p className="mt-2 font-sans text-sm leading-relaxed text-muted">
-                    {ai.subject.description}
-                  </p>
-                )}
-              </motion.div>
-            )}
+          <div className="grid grid-cols-2 gap-px bg-border">
+            <div className="bg-bg-off p-5">
+              <p className={CARD_LABEL}>Subject</p>
+              {ai.subject?.primary && (
+                <p className="font-sans text-base font-medium text-text">
+                  {ai.subject.primary}
+                </p>
+              )}
+              {ai.subject?.description && (
+                <p className="mt-1 font-sans text-sm leading-snug text-muted">
+                  {ai.subject.description}
+                </p>
+              )}
+            </div>
 
-            {ai.lighting && (ai.lighting.summary || ai.lighting.direction) && (
-              <motion.div variants={staggerItem} className="sm:pl-8">
-                <span className={LABEL_CLASS}>Lighting</span>
-                <div className="flex flex-wrap gap-2">
-                  <Chip label="Direction" value={ai.lighting.direction} />
-                  <Chip label="Quality" value={ai.lighting.quality} />
-                  <Chip label="Time" value={ai.lighting.time_of_day} />
-                </div>
-                {ai.lighting.summary && (
-                  <p className="mt-2 font-sans text-sm leading-relaxed text-muted">
-                    {ai.lighting.summary}
-                  </p>
-                )}
-              </motion.div>
-            )}
-          </motion.div>
+            <div className="bg-bg-off p-5">
+              <p className={CARD_LABEL}>Lighting</p>
+              <div className="flex flex-wrap gap-2">
+                <Chip value={ai.lighting?.direction} />
+                <Chip value={ai.lighting?.quality} />
+                <Chip value={ai.lighting?.time_of_day} />
+              </div>
+              {ai.lighting?.summary && (
+                <p className="mt-2 font-sans text-sm leading-snug text-muted">
+                  {ai.lighting.summary}
+                </p>
+              )}
+            </div>
+
+            <div className="bg-bg-off p-5">
+              <p className={CARD_LABEL}>What works</p>
+              <ItemLines items={strengths} tone="good" />
+            </div>
+
+            <div className="bg-bg-off p-5">
+              <p className={CARD_LABEL}>What to improve</p>
+              <ItemLines items={improvements} tone="suggest" />
+            </div>
+          </div>
           <hr className="my-8" />
         </>
       )}
 
+      {/* c) Camera settings — horizontal strip, one-line explanation */}
       {settings && (hasAnySetting || settings.reasoning) && (
         <>
           <div>
@@ -153,57 +170,29 @@ function CritiqueContent({ ai }: { ai: AIAnalysis }) {
               </p>
             )}
             {settings.reasoning && (
-              <p className="mt-3 font-sans text-sm text-muted">{settings.reasoning}</p>
+              <p className="mt-3 overflow-hidden text-ellipsis whitespace-nowrap font-sans text-sm text-muted">
+                {settings.reasoning}
+              </p>
             )}
           </div>
           <hr className="my-8" />
         </>
       )}
 
-      {ai.composition_critique && (
+      {/* d) Overall — one sentence */}
+      {crit?.overall && (
         <>
-          {(ai.composition_critique.strengths.length > 0 ||
-            ai.composition_critique.improvements.length > 0) && (
-            <>
-              <motion.div
-                variants={staggerContainer}
-                initial="hidden"
-                animate="show"
-                className="grid gap-8 sm:grid-cols-2 sm:divide-x sm:divide-border"
-              >
-                {ai.composition_critique.strengths.length > 0 && (
-                  <motion.div variants={staggerItem} className="sm:pr-8">
-                    <span className={LABEL_CLASS}>What works</span>
-                    <BulletList items={ai.composition_critique.strengths} tone="good" />
-                  </motion.div>
-                )}
-                {ai.composition_critique.improvements.length > 0 && (
-                  <motion.div variants={staggerItem} className="sm:pl-8">
-                    <span className={LABEL_CLASS}>What to improve</span>
-                    <BulletList items={ai.composition_critique.improvements} tone="suggest" />
-                  </motion.div>
-                )}
-              </motion.div>
-              <hr className="my-8" />
-            </>
-          )}
-
-          {ai.composition_critique.overall && (
-            <>
-              <p className="max-w-2xl font-display text-lg italic text-muted">
-                {ai.composition_critique.overall}
-              </p>
-              <hr className="my-8" />
-            </>
-          )}
+          <p className="max-w-2xl font-display text-base text-muted">{crit.overall}</p>
+          <hr className="my-8" />
         </>
       )}
 
+      {/* e) Recreation guide — compact numbered list, clamped to 2 lines */}
       {ai.recreation_guide.length > 0 && (
         <div>
           <span className={LABEL_CLASS}>Recreation guide</span>
           <div>
-            {ai.recreation_guide.map((step, i) => (
+            {ai.recreation_guide.slice(0, 4).map((step, i) => (
               <div
                 key={i}
                 className="flex gap-6 border-b border-border py-3 transition-colors duration-150 last:border-b-0 hover:bg-bg-off"
@@ -211,7 +200,7 @@ function CritiqueContent({ ai }: { ai: AIAnalysis }) {
                 <span className="w-8 shrink-0 font-mono text-xs text-subtle">
                   {String(i + 1).padStart(2, "0")}
                 </span>
-                <span className="font-sans text-sm text-text">{step}</span>
+                <span className="line-clamp-2 font-sans text-sm text-text">{step}</span>
               </div>
             ))}
           </div>
@@ -221,32 +210,36 @@ function CritiqueContent({ ai }: { ai: AIAnalysis }) {
   );
 }
 
-function Chip({ label, value }: { label: string; value: string | null }) {
-  if (!value) return null;
+/** Lighting dimension chip — value only (direction/quality/time). Skips
+ * missing or "unknown" values so the row shows only what's actually known. */
+function Chip({ value }: { value: string | null | undefined }) {
+  if (!value || value.toLowerCase() === "unknown") return null;
   return (
-    <span className="bg-tag-bg px-2 py-0.5 font-mono text-xs text-muted">
-      <span className="text-subtle">{label}:</span> {value}
+    <span className="border border-border bg-bg px-2 py-0.5 font-mono text-xs text-muted">
+      {value}
     </span>
   );
 }
 
-function BulletList({
-  items,
-  tone,
-}: {
-  items: string[];
-  tone: "good" | "suggest";
-}) {
-  const textColor = tone === "good" ? "text-text" : "text-muted";
+/** Critique items as square-prefixed single lines (max 3). "good" → filled
+ * ■ in text color; "suggest" → outline □ in muted. */
+function ItemLines({ items, tone }: { items: string[]; tone: "good" | "suggest" }) {
+  const filled = tone === "good";
+  const textColor = filled ? "text-text" : "text-muted";
   return (
-    <ul className="space-y-2">
-      {items.map((item, i) => (
-        <li key={i} className={`flex gap-2.5 font-sans text-sm ${textColor}`}>
-          <span className="mt-1.5 h-1.5 w-1.5 shrink-0 bg-current" />
-          <span className="leading-relaxed">{item}</span>
-        </li>
+    <div className="space-y-2">
+      {items.slice(0, 3).map((item, i) => (
+        <div
+          key={i}
+          className={`flex items-start gap-2 font-sans text-sm leading-snug ${textColor}`}
+        >
+          <span
+            className={`mt-1.5 h-1.5 w-1.5 shrink-0 ${filled ? "bg-current" : "border border-current"}`}
+          />
+          <span>{item}</span>
+        </div>
       ))}
-    </ul>
+    </div>
   );
 }
 

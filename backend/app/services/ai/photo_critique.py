@@ -43,20 +43,30 @@ _SYSTEM_PROMPT = (
     "This renders as a scannable card, not an essay. Favor short phrases over "
     "full sentences, cut filler words and hedging, and stay within every word "
     "limit below — they are hard caps, not targets to approach.\n\n"
+    "Be extremely concise. These per-field limits are HARD caps:\n"
+    "- scene.summary: maximum 20 words, one sentence only\n"
+    "- subject.primary: 3-5 words\n"
+    "- subject.description: maximum 15 words\n"
+    "- lighting.summary: maximum 20 words\n"
+    "- camera_settings.reasoning: maximum 30 words\n"
+    "- composition_critique.strengths: exactly 3 items, maximum 12 words each\n"
+    "- composition_critique.improvements: exactly 3 items, maximum 12 words each\n"
+    "- composition_critique.overall: maximum 25 words, one sentence\n"
+    "- recreation_guide: exactly 4 steps, maximum 15 words each\n\n"
     "Respond with ONLY a single JSON object (no markdown fences, no prose) with "
     "exactly this shape:\n"
     "{\n"
     '  "scene": {\n'
-    '    "summary": "a punchy phrase describing the photo, under 12 words",\n'
+    '    "summary": "a punchy one-sentence description of the photo, max 20 words",\n'
     '    "setting": "e.g. outdoor coastal / indoor studio / urban street",\n'
     '    "tags": ["3-5 short descriptive tags"]\n'
     "  },\n"
     '  "subject": {\n'
-    '    "primary": "the main subject in a few words",\n'
-    '    "description": "how it is framed, under 12 words"\n'
+    '    "primary": "the main subject, 3-5 words",\n'
+    '    "description": "how it is framed, max 15 words"\n'
     "  },\n"
     '  "lighting": {\n'
-    '    "summary": "the light in a phrase, under 10 words",\n'
+    '    "summary": "the light in a phrase, max 20 words",\n'
     '    "direction": "front | back | side | top | diffuse | mixed | unknown",\n'
     '    "quality": "hard | soft | diffuse | mixed | unknown",\n'
     '    "time_of_day": "golden hour | blue hour | midday | overcast | night | indoor | unknown"\n'
@@ -67,14 +77,14 @@ _SYSTEM_PROMPT = (
     '    "iso": "e.g. 100 or null",\n'
     '    "focal_length": "e.g. 35mm or null",\n'
     '    "from_exif": true/false (true if taken from provided EXIF, false if estimated),\n'
-    '    "reasoning": "one short sentence explaining the settings, under 18 words"\n'
+    '    "reasoning": "one sentence explaining the settings, max 30 words"\n'
     "  },\n"
     '  "composition_critique": {\n'
-    '    "strengths": ["exactly 2 specific things that work, under 10 words each"],\n'
-    '    "improvements": ["1-2 concrete, actionable suggestions, under 10 words each"],\n'
-    '    "overall": "one short sentence overall assessment, under 18 words"\n'
+    '    "strengths": ["exactly 3 specific things that work, max 12 words each"],\n'
+    '    "improvements": ["exactly 3 concrete, actionable suggestions, max 12 words each"],\n'
+    '    "overall": "one-sentence overall assessment, max 25 words"\n'
     "  },\n"
-    '  "recreation_guide": ["3-4 ordered, practical steps, under 10 words each"],\n'
+    '  "recreation_guide": ["exactly 4 ordered, practical steps, max 15 words each"],\n'
     '  "semantic_composition": {\n'
     '    "leading_lines": {\n'
     '      "present": true/false,\n'

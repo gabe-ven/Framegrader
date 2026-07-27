@@ -109,9 +109,12 @@ export function PhotographSection({
     <div className="flex flex-col gap-8">
       <hr className="relative left-1/2 w-screen -translate-x-1/2" />
 
-      <div className="grid grid-cols-5 items-start gap-8">
-        {/* Photo — left, dominant */}
-        <div className="col-span-3">
+      <div className="grid grid-cols-5 items-stretch gap-8">
+        {/* Photo — left, dominant. Shown uncropped (object-contain) and
+            vertically centered, so the leftover space (the info column runs
+            taller once the Fujifilm recipe is present) sits evenly above and
+            below the photo rather than all beneath it. */}
+        <div className="col-span-3 flex flex-col justify-center">
           <div className="relative w-full overflow-hidden bg-bg">
             {previewUrl ? (
               <motion.img
@@ -145,57 +148,52 @@ export function PhotographSection({
 
         {/* Info — right */}
         <div className="col-span-2 flex flex-col">
-          <h2 className="font-display text-2xl text-text">{cameraName(exif, file.name)}</h2>
+          <h2 className="font-sans text-2xl font-semibold text-text">
+            {cameraName(exif, file.name)}
+          </h2>
 
           {exif?.has_exif && (
             <dl className="mt-4">
               {exifRows.map(([label, value]) => (
-                <div
-                  key={label}
-                  className="flex items-center justify-between border-b border-border py-2"
-                >
-                  <dt className="font-mono text-[10px] uppercase tracking-widest text-subtle">
-                    {label}
-                  </dt>
-                  <dd className="font-mono text-base text-text">{value ?? "—"}</dd>
-                </div>
+                <DataRow key={label} label={label} value={value ?? "—"} />
               ))}
             </dl>
           )}
 
           {recipe && (recipe.film_simulation || recipeRows.length > 0) && (
             <>
-              <hr className="my-6" />
-              <p className="font-mono text-[10px] uppercase tracking-widest text-subtle">
-                Fujifilm recipe
-              </p>
-              {recipe.film_simulation && (
-                <p className="mt-2 font-mono text-base text-text">{recipe.film_simulation}</p>
-              )}
+              <div className="mt-6 mb-3 flex items-baseline justify-between gap-4">
+                <span className="font-mono text-[10px] uppercase tracking-widest text-subtle">
+                  Fujifilm Recipe
+                </span>
+                {recipe.film_simulation && (
+                  <span className="font-display text-xl text-text">
+                    {recipe.film_simulation}
+                  </span>
+                )}
+              </div>
+              <hr />
               {recipeRows.length > 0 && (
-                <dl className="mt-3">
+                <dl>
                   {recipeRows.map(([label, value]) => (
-                    <div
-                      key={label}
-                      className="flex items-center justify-between gap-4 border-b border-border py-2"
-                    >
-                      <dt className="font-mono text-[10px] uppercase tracking-widest text-subtle">
-                        {label}
-                      </dt>
-                      <dd className="text-right font-mono text-sm text-text">{value}</dd>
-                    </div>
+                    <DataRow key={label} label={label} value={value} />
                   ))}
                 </dl>
               )}
               {recipe.reasoning && (
-                <p className="mt-3 text-xs italic leading-relaxed text-muted">{recipe.reasoning}</p>
+                <p className="mt-3 font-sans text-xs text-muted">{recipe.reasoning}</p>
               )}
             </>
           )}
 
           {composition && (
             <>
-              <hr className="my-6" />
+              <div className="mt-6 mb-3">
+                <span className="font-mono text-[10px] uppercase tracking-widest text-subtle">
+                  Composition Layers
+                </span>
+              </div>
+              <hr className="mb-2" />
               <CompositionToggles
                 variant="rows"
                 toggles={toggles}
@@ -206,20 +204,17 @@ export function PhotographSection({
             </>
           )}
 
-          <hr className="my-6" />
-          <div className="flex items-center gap-4">
+          {/* mt-auto pins the buttons to the bottom of the info column so they
+              sit level with the (taller) photo's bottom edge; pt-6 keeps a
+              minimum gap when the column content nearly fills the height. */}
+          <div className="mt-auto pt-6">
             <button
               onClick={onChooseAnother}
-              className="font-mono text-xs font-medium uppercase tracking-widest text-muted transition-colors hover:text-text"
+              className="block w-full border border-border px-4 py-3 text-center font-mono text-xs uppercase tracking-widest text-text transition-colors duration-150 hover:bg-bg-off"
             >
               Choose another
             </button>
-            {canEdit && (
-              <>
-                <span className="text-border">|</span>
-                <EditPhotoLink onClick={onEditPhoto} />
-              </>
-            )}
+            {canEdit && <EditPhotoButton onClick={onEditPhoto} />}
           </div>
         </div>
       </div>
@@ -229,21 +224,32 @@ export function PhotographSection({
   );
 }
 
-function EditPhotoLink({ onClick }: { onClick: () => void }) {
+function EditPhotoButton({ onClick }: { onClick: () => void }) {
   const arrowX = useMotionValue(0);
 
   return (
     <motion.button
       onClick={onClick}
-      onHoverStart={() => animate(arrowX, 6, ARROW_SPRING)}
+      onHoverStart={() => animate(arrowX, 4, ARROW_SPRING)}
       onHoverEnd={() => animate(arrowX, 0, ARROW_SPRING)}
-      className="font-mono text-xs font-medium uppercase tracking-widest text-muted transition-colors hover:text-text"
+      className="mt-2 block w-full bg-bg-dark px-4 py-3 text-center font-mono text-xs uppercase tracking-widest text-white transition-colors duration-150 hover:bg-[#333333]"
     >
       Edit photo{" "}
       <motion.span className="inline-block" style={{ x: arrowX }}>
         →
       </motion.span>
     </motion.button>
+  );
+}
+
+/** One label/value row shared by the EXIF table and the recipe settings, so
+ * both share identical structure, sizing, and rhythm. */
+function DataRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-baseline justify-between gap-4 border-b border-border py-2.5">
+      <dt className="font-mono text-[10px] uppercase tracking-widest text-subtle">{label}</dt>
+      <dd className="text-right font-mono text-sm font-medium text-text">{value}</dd>
+    </div>
   );
 }
 
