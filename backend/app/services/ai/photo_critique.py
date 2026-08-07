@@ -12,9 +12,7 @@ can respond cleanly and the frontend can show a graceful "unavailable" state.
 
 from __future__ import annotations
 
-import json
 import logging
-import re
 from typing import Any
 
 from PIL import Image
@@ -24,13 +22,12 @@ from app.services.ai.ai_client import (
     encode_image,
     extract_response_text,
     get_anthropic_client,
+    parse_json_object,
 )
 
 logger = logging.getLogger(__name__)
 
 _MAX_TOKENS = 2200
-
-_JSON_OBJECT_RE = re.compile(r"\{.*\}", re.DOTALL)
 
 _SYSTEM_PROMPT = (
     "You are an expert photography instructor analyzing a photo for a "
@@ -200,19 +197,6 @@ def build_context_summary(context: dict[str, Any] | None) -> str:
     return "\n".join(lines)
 
 
-def _parse_json(text: str) -> dict[str, Any] | None:
-    """Best-effort parse of the model's JSON object response."""
-    if not text:
-        return None
-    match = _JSON_OBJECT_RE.search(text)
-    candidate = match.group(0) if match else text
-    try:
-        parsed = json.loads(candidate)
-        return parsed if isinstance(parsed, dict) else None
-    except json.JSONDecodeError:
-        return None
-
-
 def _unavailable(reason: str) -> dict[str, Any]:
     return {"available": False, "reason": reason}
 
@@ -269,7 +253,7 @@ def generate_critique(
             ],
         )
         text = extract_response_text(response)
-        parsed = _parse_json(text)
+        parsed = parse_json_object(text)
     except Exception as exc:  # noqa: BLE001 - never let an AI failure crash the endpoint
         logger.warning(
             "AI critique generation failed (%s: %s).",
@@ -283,5 +267,22 @@ def generate_critique(
         logger.warning("AI critique response was not parseable JSON: %r", text)
         return _unavailable("AI analysis returned an unreadable response.")
 
+    _reattach_misnested_overall(parsed)
     parsed["available"] = True
     return parsed
+
+
+def _reattach_misnested_overall(parsed: dict[str, Any]) -> None:
+    """Recover ``overall`` when the model emits it as a stray top-level key.
+
+    Observed in the wild: a brace-repaired response can leave "overall" as a
+    sibling of "composition_critique" instead of nested inside it (the model
+    closed that object one brace early). Move it back in place so the
+    verdict still renders instead of silently vanishing.
+    """
+    stray_overall = parsed.pop("overall", None)
+    if not stray_overall:
+        return
+    crit = parsed.get("composition_critique")
+    if isinstance(crit, dict) and not crit.get("overall"):
+        crit["overall"] = stray_overall

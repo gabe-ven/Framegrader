@@ -2,7 +2,6 @@ import { motion } from "framer-motion";
 import type { ReactNode } from "react";
 import type { CompositionInfo, SemanticComposition } from "@/types/analysis";
 import { CompositionRadar } from "./CompositionRadar";
-import { CompositionScores } from "./CompositionScores";
 import { CompositionSummary } from "./CompositionSummary";
 import { EdgeDensityChart } from "./EdgeDensityChart";
 import { LeadingLinesScatter } from "./LeadingLinesScatter";
@@ -24,17 +23,18 @@ export function CompositionVisuals({
 
   return (
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-      <ChartCard title="Composition profile" delay={0} className="lg:col-span-2 lg:row-span-2">
+      <ChartCard title="Composition profile" delay={0} className="lg:col-span-2">
         <CompositionRadar composition={composition} semantic={semantic} />
       </ChartCard>
 
-      <ChartCard title="Summary" delay={0.05}>
+      <motion.div
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4, delay: 0.05, ease: "easeOut" }}
+        className="p-5"
+      >
         <CompositionSummary composition={composition} semantic={semantic} />
-      </ChartCard>
-
-      <ChartCard title="Key scores" delay={0.1}>
-        <CompositionScores composition={composition} semantic={semantic} />
-      </ChartCard>
+      </motion.div>
 
       <ChartCard title="Edge density by region" delay={0.15} className={edgeDensitySpan}>
         <EdgeDensityChart composition={composition} />

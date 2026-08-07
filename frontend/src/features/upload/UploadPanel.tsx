@@ -176,6 +176,7 @@ export function UploadPanel() {
           colorGrade={colorGrade}
           colorGradeStatus={colorGradeStatus}
           colorGradeError={colorGradeError}
+          fetchColorGrade={fetchColorGrade}
           onBack={() => setView("results")}
         />
       )}

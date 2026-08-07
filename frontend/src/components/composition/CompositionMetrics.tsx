@@ -173,6 +173,7 @@ export function CompositionMetrics({
   semantic?: SemanticComposition | null;
 }) {
   const metrics = buildMetrics(composition, semantic);
+  const isLastInRow = (i: number) => (i + 1) % 3 === 0 || i === metrics.length - 1;
 
   return (
     <motion.div
@@ -180,16 +181,16 @@ export function CompositionMetrics({
       initial="hidden"
       whileInView="show"
       viewport={STAGGER_VIEWPORT}
-      className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3"
+      className="grid grid-cols-3"
     >
-      {metrics.map((m) => (
+      {metrics.map((m, i) => (
         <motion.div
           key={m.key}
           variants={staggerItem}
-          whileHover={{ y: -3, borderColor: "#2e2e2e", backgroundColor: "#161616" }}
+          whileHover={{ y: -3 }}
           whileTap={{ y: 0, scale: 0.99 }}
           transition={{ type: "spring", stiffness: 400, damping: 30 }}
-          className="rounded border border-border bg-surface p-5"
+          className={`border-b border-border p-6 ${isLastInRow(i) ? "" : "border-r border-border"}`}
         >
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2 text-muted">

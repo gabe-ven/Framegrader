@@ -5,6 +5,8 @@ export interface DataStripItem {
   label: string;
   value: ReactNode;
   aiSourced?: boolean;
+  /** Optional short contextual descriptor shown below the value (e.g. "Moderate detail"). */
+  context?: string;
   /** Optional longer explanation surfaced via an info tooltip. */
   hint?: string;
 }
@@ -45,6 +47,9 @@ export function DataStrip({ items }: DataStripProps) {
             <div className="font-mono text-4xl font-medium tabular-nums text-text">
               {item.value}
             </div>
+            {item.context && (
+              <div className="mt-1 font-mono text-xs text-muted">{item.context}</div>
+            )}
             <div className="mt-1 flex items-center gap-1 font-mono text-[10px] uppercase tracking-widest text-subtle">
               {item.label}
               {item.aiSourced && <span className="text-muted">· AI</span>}

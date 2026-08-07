@@ -60,7 +60,7 @@ export function EdgeDensityChart({
             animationDuration={800}
           >
             {data.map((entry) => (
-              <Cell key={entry.region} fill="#c17a4a" fillOpacity={0.6} />
+              <Cell key={entry.region} fill="rgba(10,10,10,0.25)" />
             ))}
           </Bar>
         </BarChart>

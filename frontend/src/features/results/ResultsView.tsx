@@ -1,5 +1,4 @@
 import { motion } from "framer-motion";
-import { EditCTABand } from "@/components/EditCTABand";
 import type { AIAnalysis, AnalysisResponse } from "@/types/analysis";
 import { CritiqueSection } from "./CritiqueSection";
 import { MeasurementsSection } from "./MeasurementsSection";
@@ -56,6 +55,7 @@ export function ResultsView({
         {status === "success" && (
           <CritiqueSection
             ai={ai}
+            exif={result?.exif ?? null}
             loading={false}
             error={aiStatus === "error" ? aiError : null}
             delay={0}
@@ -71,7 +71,6 @@ export function ResultsView({
           delay={0.2}
         />
       </div>
-      {status === "success" && <EditCTABand onClick={onEditPhoto} />}
     </motion.div>
   );
 }

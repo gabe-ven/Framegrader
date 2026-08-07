@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import io
 
-from PIL import Image, UnidentifiedImageError
+from PIL import Image, ImageOps, UnidentifiedImageError
 
 # Formats we accept. EXIF lives mainly in JPEG/TIFF, but we allow common
 # web formats too so users can analyze anything.
@@ -43,6 +43,12 @@ def open_image(data: bytes) -> Image.Image:
 
     Pillow's `verify()` consumes the file object, so we open twice: once to
     verify integrity, once to return a usable image.
+
+    Applies the EXIF orientation tag (common on phone photos, which often
+    store the sensor's native landscape buffer plus a tag saying "rotate
+    this for display") so `.size` and every downstream consumer — vision
+    metrics, composition geometry, the image sent to the AI — see the photo
+    the way it actually displays, not the raw unrotated buffer.
     """
     try:
         Image.open(io.BytesIO(data)).verify()
@@ -52,6 +58,10 @@ def open_image(data: bytes) -> Image.Image:
     image = Image.open(io.BytesIO(data))
     if image.format not in ALLOWED_FORMATS:
         raise ImageValidationError(f"Unsupported image format: {image.format}.")
+
+    original_format = image.format
+    image = ImageOps.exif_transpose(image)
+    image.format = original_format
     return image
 
 

@@ -91,6 +91,39 @@ def test_generate_critique_handles_unparseable_response() -> None:
     assert "unreadable" in result["reason"].lower()
 
 
+def test_generate_critique_recovers_from_invalid_backslash_escape() -> None:
+    # \' is valid in Python/JS string literals but illegal JSON and trips
+    # json.loads — guard against a model emitting it for an apostrophe.
+    broken = _VALID_JSON.replace("A solid minimalist seascape.", "A photographer\\'s dream shot.")
+    result = generate_critique(_image(), client=_FakeClient(broken))
+    assert result["available"] is True
+    assert result["composition_critique"]["overall"] == "A photographer's dream shot."
+
+
+def test_generate_critique_recovers_from_misnested_overall() -> None:
+    # Observed in production: the model closed composition_critique's `{`
+    # one brace early, then emitted "overall" as a stray top-level sibling
+    # followed by an extra `}` that terminated the whole object prematurely
+    # — e.g. ...,"improvements":[...]},"overall":"x"},"recreation_guide":...
+    # json.loads reports "Extra data" right after that stray brace. The fix
+    # drops it, then reattaches "overall" into composition_critique so the
+    # verdict still renders instead of the whole critique going unavailable.
+    broken = (
+        '{"scene":{"summary":"s","setting":"t","tags":[]},'
+        '"subject":{"primary":"p","description":"d"},'
+        '"lighting":{"summary":"l","direction":"side","quality":"soft","time_of_day":"day"},'
+        '"camera_settings":{"aperture":"f/8","shutter_speed":"1/100","iso":"100","focal_length":"35mm","from_exif":true,"reasoning":"r"},'
+        '"composition_critique":{"strengths":["s1"],"improvements":["i1"]},'
+        '"overall":"A solid minimalist seascape."},'
+        '"recreation_guide":["step1","step2"]}'
+    )
+    result = generate_critique(_image(), client=_FakeClient(broken))
+    assert result["available"] is True
+    assert result["composition_critique"]["overall"] == "A solid minimalist seascape."
+    assert result["recreation_guide"] == ["step1", "step2"]
+    assert "overall" not in result
+
+
 def test_generate_critique_handles_api_failure() -> None:
     result = generate_critique(_image(), client=_RaisingClient())
     assert result["available"] is False

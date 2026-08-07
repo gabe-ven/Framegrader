@@ -43,47 +43,31 @@ export function CompositionSummary({
   const band = scoreBand(score);
 
   return (
-    <div className="flex h-full flex-col">
-      <div className="flex items-baseline gap-2">
-        <span className="font-mono text-4xl font-semibold tabular-nums text-heading">
-          {score}
-        </span>
-        <span className="text-sm text-muted">/ 100</span>
-        <span className={`ml-auto rounded-none px-2.5 py-0.5 font-mono text-[11px] uppercase ${band.className}`}>
-          {band.label}
+    <div>
+      <div className="flex items-baseline">
+        <span className="font-mono text-3xl text-text">{score} / 100</span>
+        <span className="ml-3 font-mono text-[10px] uppercase tracking-widest text-subtle">
+          {band}
         </span>
       </div>
-      <p className="mt-1 text-xs text-muted">
-        Mean of applicable composition axes.
-      </p>
-      <ul className="mt-4 space-y-2">
-        {takeaways.map((t) => (
-          <li
+      <div className="mt-4">
+        {takeaways.map((t, i) => (
+          <p
             key={t}
-            className="flex items-start gap-2 text-sm leading-snug text-ink/80"
+            className={`py-2 font-sans text-sm text-muted ${
+              i !== takeaways.length - 1 ? "border-b border-border" : ""
+            }`}
           >
-            <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-heading/30" />
             {t}
-          </li>
+          </p>
         ))}
-      </ul>
+      </div>
     </div>
   );
 }
 
-function scoreBand(score: number): { label: string; className: string } {
-  if (score >= 70)
-    return {
-      label: "Strong",
-      className: "border border-accent/25 bg-accent/[0.12] text-accent",
-    };
-  if (score >= 45)
-    return {
-      label: "Balanced",
-      className: "text-dim",
-    };
-  return {
-    label: "Review",
-    className: "border border-border-strong bg-[#1a1a1a] text-muted",
-  };
+function scoreBand(score: number): string {
+  if (score >= 70) return "Strong";
+  if (score >= 45) return "Balanced";
+  return "Review";
 }

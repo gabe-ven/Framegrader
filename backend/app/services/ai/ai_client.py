@@ -9,13 +9,23 @@ from __future__ import annotations
 
 import base64
 import io
+import json
 import logging
 import os
+import re
 from typing import Any
 
 from PIL import Image
 
 logger = logging.getLogger(__name__)
+
+_JSON_OBJECT_RE = re.compile(r"\{.*\}", re.DOTALL)
+
+# Matches a backslash not followed by a legal JSON escape character. Models
+# sometimes escape an apostrophe as \' (valid in Python/JS string literals,
+# illegal in JSON) — stripping these backslashes salvages the response
+# instead of discarding it outright.
+_INVALID_ESCAPE_RE = re.compile(r'\\(?!["\\/bfnrtu])')
 
 # Default Claude model for the AI layer. Kept in sync with the VLM subject
 # locator so the whole app uses one vision model.
@@ -72,3 +82,49 @@ def extract_response_text(response: Any) -> str:
     blocks = getattr(response, "content", None) or []
     texts = [getattr(block, "text", None) for block in blocks]
     return "".join(t for t in texts if t)
+
+
+def _loads_with_brace_repair(text: str) -> Any | None:
+    """`json.loads`, with one targeted retry for a stray closing brace.
+
+    Observed in the wild: the model occasionally over-closes a nested object
+    one brace early, then keeps emitting sibling keys as if it were still
+    open — e.g. ``..."composition_critique":{...},"overall":"x"},"next":...``
+    where that `}` right after "x" terminates the whole object prematurely.
+    json.loads reports this as "Extra data" at the position where the second
+    (illegal) top-level value starts; the character just before it is the
+    stray brace/bracket. Dropping it and reparsing recovers the rest of the
+    payload instead of discarding it outright.
+    """
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError as exc:
+        if exc.msg != "Extra data" or exc.pos == 0 or text[exc.pos - 1] not in "}]":
+            return None
+        repaired = text[: exc.pos - 1] + text[exc.pos :]
+        try:
+            return json.loads(repaired)
+        except json.JSONDecodeError:
+            return None
+
+
+def parse_json_object(text: str) -> dict[str, Any] | None:
+    """Best-effort parse of a JSON object out of a model's text response.
+
+    Extracts the first ``{...}`` span (tolerating surrounding prose), then
+    tries progressively more permissive repairs before giving up: parse as
+    given, then retry with invalid backslash escapes stripped (models
+    occasionally produce non-JSON escapes like ``\\'``), each also retried
+    with a stray-closing-brace repair (see `_loads_with_brace_repair`).
+    Returns None if no valid JSON object can be recovered.
+    """
+    if not text:
+        return None
+    match = _JSON_OBJECT_RE.search(text)
+    candidate = match.group(0) if match else text
+
+    for variant in (candidate, _INVALID_ESCAPE_RE.sub("", candidate)):
+        parsed = _loads_with_brace_repair(variant)
+        if isinstance(parsed, dict):
+            return parsed
+    return None

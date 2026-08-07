@@ -25,9 +25,6 @@ interface MeasurementsSectionProps {
   delay?: number;
 }
 
-const SECTION_DESCRIPTION =
-  "The technical read — objective image-quality metrics from OpenCV, and composition scores blending measured geometry with the VLM's read where available.";
-
 export function MeasurementsSection({
   vision,
   composition,
@@ -39,7 +36,7 @@ export function MeasurementsSection({
 }: MeasurementsSectionProps) {
   return (
     <motion.div {...sectionMount(delay)}>
-      <Section number="02" title="MEASUREMENTS" description={SECTION_DESCRIPTION}>
+      <Section number="02" title="MEASUREMENTS">
         {loading ? (
           <MeasurementsSkeleton />
         ) : error ? (
@@ -90,6 +87,7 @@ function MeasurementsContent({
     {
       label: "Sharpness",
       value: Math.round(vision.sharpness),
+      context: sharpnessContext(Math.round(vision.sharpness)),
       hint: "Variance of the Laplacian. Higher values indicate more fine detail; low values suggest softness or blur.",
     },
     {
@@ -186,6 +184,13 @@ function MeasurementsContent({
 
 function capitalize(text: string): string {
   return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
+function sharpnessContext(value: number): string {
+  if (value < 100) return "Low detail";
+  if (value < 400) return "Moderate detail";
+  if (value <= 800) return "High detail";
+  return "Very high detail";
 }
 
 function MeasurementsSkeleton() {

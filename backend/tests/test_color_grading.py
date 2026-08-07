@@ -99,6 +99,18 @@ def test_generate_color_grade_handles_unparseable_response() -> None:
     assert "unreadable" in result["reason"].lower()
 
 
+def test_generate_color_grade_recovers_from_invalid_backslash_escape() -> None:
+    # Real responses have escaped an apostrophe as \', which is valid in
+    # Python/JS string literals but not legal JSON and trips json.loads.
+    broken = _VALID_JSON.replace(
+        "Lifts the shadows and warms the highlights for a filmic look.",
+        "Lifts the shadows for a photographer\\'s filmic look.",
+    )
+    result = generate_color_grade(_image(), client=_FakeClient(broken))
+    assert result["available"] is True
+    assert result["reasoning"] == "Lifts the shadows for a photographer's filmic look."
+
+
 def test_generate_color_grade_handles_api_failure() -> None:
     result = generate_color_grade(_image(), client=_RaisingClient())
     assert result["available"] is False

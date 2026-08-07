@@ -26,9 +26,9 @@ export function CompositionRadar({
         margin={{ top: 30, right: 60, bottom: 30, left: 60 }}
         gridLabelOffset={20}
         dotSize={5}
-        dotColor="#c17a4a"
+        dotColor="#0a0a0a"
         dotBorderWidth={0}
-        colors={["#c17a4a"]}
+        colors={["#0a0a0a"]}
         fillOpacity={0.06}
         borderWidth={1.5}
         blendMode="normal"

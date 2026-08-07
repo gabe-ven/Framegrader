@@ -10,9 +10,7 @@ back to zeroed sliders.
 
 from __future__ import annotations
 
-import json
 import logging
-import re
 from typing import Any
 
 from PIL import Image
@@ -22,13 +20,12 @@ from app.services.ai.ai_client import (
     encode_image,
     extract_response_text,
     get_anthropic_client,
+    parse_json_object,
 )
 
 logger = logging.getLogger(__name__)
 
 _MAX_TOKENS = 500
-
-_JSON_OBJECT_RE = re.compile(r"\{.*\}", re.DOTALL)
 
 _SYSTEM_PROMPT = (
     "You are an expert photo colorist suggesting a color grade for a "
@@ -111,19 +108,6 @@ def build_context_summary(context: dict[str, Any] | None) -> str:
     return "\n".join(lines)
 
 
-def _parse_json(text: str) -> dict[str, Any] | None:
-    """Best-effort parse of the model's JSON object response."""
-    if not text:
-        return None
-    match = _JSON_OBJECT_RE.search(text)
-    candidate = match.group(0) if match else text
-    try:
-        parsed = json.loads(candidate)
-        return parsed if isinstance(parsed, dict) else None
-    except json.JSONDecodeError:
-        return None
-
-
 def _unavailable(reason: str) -> dict[str, Any]:
     return {"available": False, "reason": reason}
 
@@ -182,7 +166,7 @@ def generate_color_grade(
             ],
         )
         text = extract_response_text(response)
-        parsed = _parse_json(text)
+        parsed = parse_json_object(text)
     except Exception as exc:  # noqa: BLE001 - never let an AI failure crash the endpoint
         logger.warning(
             "Color grading generation failed (%s: %s).",

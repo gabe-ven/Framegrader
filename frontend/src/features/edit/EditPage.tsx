@@ -39,6 +39,7 @@ interface EditPageProps {
   colorGrade: ColorGradeResponse | null;
   colorGradeStatus: "idle" | "loading" | "success" | "error";
   colorGradeError: string | null;
+  fetchColorGrade: () => void;
   onBack: () => void;
 }
 
@@ -47,11 +48,16 @@ export function EditPage({
   colorGrade,
   colorGradeStatus,
   colorGradeError,
+  fetchColorGrade,
   onBack,
 }: EditPageProps) {
-  const aiAdjustments = colorGrade?.available ? colorGrade.adjustments : ZERO_ADJUSTMENTS;
-  const [adjustments, setAdjustments] = useState<GradingAdjustments>(aiAdjustments);
-  const initializedRef = useRef(colorGrade?.available ?? false);
+  const [adjustments, setAdjustments] = useState<GradingAdjustments>(ZERO_ADJUSTMENTS);
+  const [wantsAiSuggestion, setWantsAiSuggestion] = useState(false);
+  // Only compare sliders against the AI suggestion once the user has asked
+  // for it — otherwise the background prefetch resolving would light up
+  // "differs from AI" dots on an untouched photo nobody asked to compare.
+  const aiAdjustments =
+    wantsAiSuggestion && colorGrade?.available ? colorGrade.adjustments : ZERO_ADJUSTMENTS;
   const canvasRef = useRef<EditCanvasHandle>(null);
   const [exporting, setExporting] = useState(false);
   const [resetConfirmed, setResetConfirmed] = useState(false);
@@ -69,14 +75,23 @@ export function EditPage({
     resetConfirmTimeoutRef.current = setTimeout(() => setResetConfirmed(false), 1200);
   };
 
-  // Fill sliders from the AI suggestion the first time it arrives; never
-  // overwrites adjustments the user has already made.
+  // Applies the AI suggestion as soon as it's ready, but only if the user
+  // has asked for it — covers clicking "AI Suggestion" while the (already
+  // in-flight) fetch is still resolving.
   useEffect(() => {
-    if (!initializedRef.current && colorGrade?.available) {
+    if (wantsAiSuggestion && colorGrade?.available) {
       setAdjustments(colorGrade.adjustments);
-      initializedRef.current = true;
     }
-  }, [colorGrade]);
+  }, [wantsAiSuggestion, colorGrade]);
+
+  const applyAiSuggestion = () => {
+    setWantsAiSuggestion(true);
+    if (colorGrade?.available) {
+      setAdjustments(colorGrade.adjustments);
+    } else if (colorGradeStatus !== "loading") {
+      fetchColorGrade();
+    }
+  };
 
   const setField = (key: keyof GradingAdjustments, value: number) =>
     setAdjustments((prev) => ({ ...prev, [key]: value }));
@@ -141,11 +156,6 @@ export function EditPage({
             >
               {exporting ? "Exporting…" : "Download"}
             </button>
-            {colorGrade?.available && colorGrade.style && (
-              <span className="rounded-sm bg-accent px-2.5 py-1 font-mono text-xs text-bg">
-                {colorGrade.style}
-              </span>
-            )}
           </div>
         </div>
 
@@ -161,9 +171,9 @@ export function EditPage({
           </Section>
 
           <div className="mt-8 space-y-4 border-t border-border pt-6">
-            {colorGradeStatus === "loading" ? (
+            {!wantsAiSuggestion ? null : colorGradeStatus === "loading" ? (
               <p className="font-mono text-xs uppercase tracking-widest text-muted">
-                Generating suggestions…
+                Generating suggestion…
               </p>
             ) : colorGradeStatus === "error" ? (
               <p className="font-mono text-sm text-red-400">
@@ -184,13 +194,16 @@ export function EditPage({
 
             <div className="flex flex-wrap items-center gap-3">
               <button
-                onClick={() => {
-                  setAdjustments(aiAdjustments);
-                  confirmReset();
-                }}
-                className="border border-border px-6 py-3 font-mono text-xs uppercase tracking-widest text-muted transition-colors hover:border-border-strong hover:text-[#999999]"
+                onClick={applyAiSuggestion}
+                disabled={
+                  (wantsAiSuggestion && colorGradeStatus === "loading") ||
+                  (colorGrade !== null && !colorGrade.available)
+                }
+                className="bg-accent px-6 py-3 font-mono text-xs uppercase tracking-widest text-bg transition-colors hover:bg-[#2a2a2a] disabled:opacity-50"
               >
-                Reset to AI values
+                {wantsAiSuggestion && colorGradeStatus === "loading"
+                  ? "Applying AI Suggestion…"
+                  : "AI Suggestion"}
               </button>
               <button
                 onClick={() => {
