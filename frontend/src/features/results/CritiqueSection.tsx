@@ -89,15 +89,15 @@ function CritiqueContent({ ai, exif }: { ai: AIAnalysis; exif: ExifInfo | null }
     : null;
 
   const crit = ai.composition_critique;
-  const critiqueItems = [...(crit?.strengths ?? []), ...(crit?.improvements ?? [])];
-  const critiqueText =
-    critiqueItems.length > 0
-      ? critiqueItems.map((s) => s.trim().replace(/\.+$/, "")).join(". ") + "."
-      : "";
+  // Kept apart deliberately: merging these into one paragraph loses the only
+  // thing that makes a critique actionable — which half is praise and which
+  // half is the fix.
+  const strengths = crit?.strengths ?? [];
+  const improvements = crit?.improvements ?? [];
 
   const hasScene = Boolean(ai.scene?.summary || tagLine);
   const hasCamera = Boolean(hasAnySetting || metaLine || subjectLine || settings?.reasoning);
-  const hasCritique = Boolean(critiqueText || crit?.overall);
+  const hasCritique = Boolean(strengths.length || improvements.length || crit?.overall);
   const steps = ai.recreation_guide.slice(0, 4);
 
   return (
@@ -134,17 +134,19 @@ function CritiqueContent({ ai, exif }: { ai: AIAnalysis; exif: ExifInfo | null }
         </div>
       )}
 
-      {/* Block 3 — Critique */}
+      {/* Block 3 — Critique, split into what works / what to improve */}
       {hasCritique && (
         <div className="border-b border-border pb-8 pt-8">
-          <p className={LABEL_CLASS}>Critique</p>
-          {critiqueText && (
-            <p className="max-w-3xl font-sans text-base leading-relaxed text-text">
-              {critiqueText}
-            </p>
-          )}
+          <div className="grid gap-x-12 gap-y-8 sm:grid-cols-2">
+            {strengths.length > 0 && (
+              <CritiqueList label="What works" items={strengths} />
+            )}
+            {improvements.length > 0 && (
+              <CritiqueList label="What to improve" items={improvements} />
+            )}
+          </div>
           {crit?.overall && (
-            <p className="mt-4 max-w-3xl font-sans text-sm leading-relaxed text-muted">
+            <p className="mt-8 max-w-3xl font-sans text-sm leading-relaxed text-muted">
               {crit.overall}
             </p>
           )}
@@ -167,6 +169,26 @@ function CritiqueContent({ ai, exif }: { ai: AIAnalysis; exif: ExifInfo | null }
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+/** One labelled column of critique points. Borrows the row rhythm from the
+ * recreation guide below it so the two blocks read as the same document. */
+function CritiqueList({ label, items }: { label: string; items: string[] }) {
+  return (
+    <div>
+      <p className={LABEL_CLASS}>{label}</p>
+      <ul>
+        {items.map((item, i) => (
+          <li
+            key={i}
+            className="border-b border-border py-3 font-sans text-sm leading-relaxed text-text first:pt-0"
+          >
+            {item}
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }

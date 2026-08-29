@@ -9,12 +9,13 @@ interface HorizonOverlayProps {
   delay?: number;
 }
 
-/** Detected horizon line, drawn with its estimated tilt. */
+/** Detected horizon line. Drawn with its estimated tilt only when the backend
+ *  reports that estimate as reliable; otherwise drawn flat at the detected row. */
 export function HorizonOverlay({ width, height, horizon, delay = 0 }: HorizonOverlayProps) {
   if (!horizon.horizon_detected || horizon.horizon_y === null) return null;
 
   const y = horizon.horizon_y * height;
-  const tilt = horizon.tilt_angle ?? 0;
+  const tilt = horizon.tilt_reliable ? horizon.tilt_angle ?? 0 : 0;
   const dy = Math.tan((tilt * Math.PI) / 180) * (width / 2);
   const stroke = Math.max(width, height) / 260;
   const color = "#ffe234";

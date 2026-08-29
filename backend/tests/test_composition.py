@@ -179,6 +179,99 @@ def test_horizon_structural_edge_no_sky_above_rejected() -> None:
     )
 
 
+# --- horizon tilt ---------------------------------------------------------
+
+
+def _horizon_scene(
+    tilt_deg: float = 0.0,
+    height: int = 300,
+    width: int = 400,
+    y_frac: float = 0.45,
+    seed: int = 42,
+    bars: tuple[tuple[int, int, int, int], ...] = (),
+) -> np.ndarray:
+    """Uniform sky above a straight boundary tilted by *tilt_deg*, noisy ground
+    below. Positive tilt drops the right-hand side. Each bar is
+    (row, col_start, col_end, value) — an off-horizon edge such as a roofline.
+    """
+    rng = np.random.default_rng(seed)
+    img = np.full((height, width), 180, dtype=np.uint8)
+    ground = rng.integers(30, 100, size=(height, width), dtype=np.uint8)
+    cols = np.arange(width)
+    boundary = y_frac * height + np.tan(np.radians(tilt_deg)) * (cols - width / 2.0)
+    mask = np.arange(height)[:, None] >= boundary[None, :]
+    img[mask] = ground[mask]
+    for row, c0, c1, value in bars:
+        img[row : row + 3, c0:c1] = value
+    return img
+
+
+def test_horizon_tilt_recovers_known_angles() -> None:
+    """A boundary drawn at a known angle must be measured back within 0.5°."""
+    for expected in (-12.0, -5.0, -1.5, 1.5, 5.0, 8.0):
+        result = detect_horizon(_horizon_scene(tilt_deg=expected))
+        assert result["horizon_detected"] is True, f"{expected}° horizon not detected"
+        assert result["tilt_reliable"] is True, (
+            f"tilt of a clean {expected}° horizon should be reliable"
+        )
+        assert abs(result["tilt_angle"] - expected) < 0.5, (
+            f"Expected ~{expected}°, measured {result['tilt_angle']}°"
+        )
+
+
+def test_horizon_level_edge_measures_zero_tilt() -> None:
+    result = detect_horizon(_horizon_scene(tilt_deg=0.0))
+    assert result["tilt_reliable"] is True
+    assert abs(result["tilt_angle"]) < 0.5
+    assert result["is_level"] is True
+
+
+def test_horizon_tilt_ignores_off_horizon_edge() -> None:
+    """REGRESSION: a level horizon with a dark silhouette high in one corner.
+
+    The previous estimator compared the vertical-gradient argmax of the left
+    half against the right half. Those are global maxima, so the silhouette
+    captured one of them while the horizon captured the other, and the row gap
+    between two unrelated features was reported as a ~22° tilt on a level
+    photo. The fit must only consider edges near the detected horizon row.
+    """
+    for bar in ((55, 0, 200, 0), (55, 200, 400, 0)):  # left corner, then right
+        result = detect_horizon(_horizon_scene(tilt_deg=0.0, bars=(bar,)))
+        assert result["horizon_detected"] is True
+        assert abs(result["tilt_angle"]) < 1.0, (
+            f"A silhouette at row {bar[0]} must not tilt a level horizon; "
+            f"got {result['tilt_angle']}°"
+        )
+
+
+def test_horizon_tilt_survives_off_horizon_edge_when_genuinely_tilted() -> None:
+    """The same distractor must not corrupt a real 5° tilt either."""
+    result = detect_horizon(_horizon_scene(tilt_deg=5.0, bars=((55, 0, 200, 0),)))
+    assert result["tilt_reliable"] is True
+    assert abs(result["tilt_angle"] - 5.0) < 0.5, (
+        f"Expected ~5°, measured {result['tilt_angle']}°"
+    )
+
+
+def test_horizon_tilt_unreliable_when_bands_disagree() -> None:
+    """Two competing edges at different rows on either side: no single line
+    explains the strip, so the estimator must decline rather than guess."""
+    result = detect_horizon(
+        _horizon_scene(tilt_deg=0.0, bars=((50, 0, 200, 0), (95, 200, 400, 0)))
+    )
+    assert result["tilt_reliable"] is False
+    assert result["tilt_angle"] == 0.0, (
+        "A declined tilt must report 0.0, never a partial estimate"
+    )
+
+
+def test_horizon_undetected_reports_unreliable_tilt() -> None:
+    result = detect_horizon(_blank())
+    assert result["horizon_detected"] is False
+    assert result["tilt_reliable"] is False
+    assert result["tilt_angle"] is None
+
+
 # --- symmetry -------------------------------------------------------------
 
 

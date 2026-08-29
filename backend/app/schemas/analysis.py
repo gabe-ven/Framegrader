@@ -126,6 +126,9 @@ class Horizon(BaseModel):
     horizon_y: float | None
     is_level: bool
     tilt_angle: float | None
+    # False while the tilt estimator is disabled — consumers must not display
+    # or reason about tilt_angle when this is False.
+    tilt_reliable: bool = False
 
 
 class Symmetry(BaseModel):

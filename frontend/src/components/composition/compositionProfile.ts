@@ -71,8 +71,11 @@ export function buildCompositionProfile(c: CompositionInfo): ProfileAxis[] {
   const negativeSpace = ns.subject_excluded_ratio * 100;
 
   // Horizon Levelness: if detected, penalize tilt up to 10° linearly; else 0.
-  // Not applicable when no horizon was detected (portraits, straight-up shots, etc.).
-  const horizonLevelness = hz.horizon_detected
+  // Not applicable when no horizon was detected (portraits, straight-up shots,
+  // etc.) or when the backend flags the tilt estimate as unreliable — scoring a
+  // suppressed tilt of 0° would inject a free 100 into the overall average.
+  const horizonMeasurable = hz.horizon_detected && hz.tilt_reliable;
+  const horizonLevelness = horizonMeasurable
     ? Math.max(0, 1 - Math.min(Math.abs(hz.tilt_angle ?? 0) / 10, 1)) * 100
     : 0;
 
@@ -91,7 +94,7 @@ export function buildCompositionProfile(c: CompositionInfo): ProfileAxis[] {
     { axis: "Leading Lines",    value: round1(leadingLines),    applicable: ll.has_leading_lines },
     { axis: "Symmetry",         value: round1(symmetry),        applicable: true },
     { axis: "Negative Space",   value: round1(negativeSpace),   applicable: true },
-    { axis: "Horizon",          value: round1(horizonLevelness), applicable: hz.horizon_detected },
+    { axis: "Horizon",          value: round1(horizonLevelness), applicable: horizonMeasurable },
     { axis: "Subject Placement", value: round1(subjectPlacement), applicable: true },
     { axis: "Edge Balance",     value: round1(edgeBalanceValue), applicable: true },
   ];

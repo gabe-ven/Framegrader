@@ -150,6 +150,55 @@ class YOLOWorldSubjectLocator(SubjectLocator):
     _model = None
     _model_load_failed = False
     _model_lock = threading.Lock()
+    # Ultralytics locks *inference* (BasePredictor._lock) but not the lazy
+    # construction of the predictor itself: Model.predict does an unguarded
+    # `if not self.predictor: self.predictor = ...`. Loading the weights does
+    # not build it — only the first predict() call does — so once the route
+    # handlers run in a threadpool, two concurrent first requests can race
+    # there. These serialize that first call; afterwards it is a flag check.
+    _predictor_ready = False
+    _predictor_lock = threading.Lock()
+
+    @classmethod
+    def _ensure_predictor(cls, model) -> None:
+        """Build the predictor exactly once, under a lock.
+
+        Runs a throwaway inference because that is the only way to trigger
+        construction through ultralytics' public API. Failures are swallowed:
+        the real call right after will surface any genuine problem, and a
+        warm-up that cannot run must not take the detector tier down.
+        """
+        if cls._predictor_ready:
+            return
+        with cls._predictor_lock:
+            if cls._predictor_ready:
+                return
+            try:
+                model.predict(
+                    np.zeros((640, 640, 3), dtype=np.uint8),
+                    conf=_MIN_DETECTION_CONF,
+                    verbose=False,
+                )
+            except Exception as exc:  # noqa: BLE001
+                logger.warning(
+                    "YOLO-World predictor warm-up failed (%s: %s); continuing.",
+                    type(exc).__name__,
+                    exc,
+                    exc_info=True,
+                )
+            cls._predictor_ready = True
+
+    @classmethod
+    def warm_up(cls) -> None:
+        """Load the weights *and* build the predictor, off the request path.
+
+        Called from the startup warm-up thread. Loading alone left the first
+        real request paying predictor construction (the ~30s cold start) and
+        exposed the race described above.
+        """
+        model = cls._get_model()
+        if model is not None:
+            cls._ensure_predictor(model)
 
     @classmethod
     def _get_model(cls):
@@ -192,6 +241,8 @@ class YOLOWorldSubjectLocator(SubjectLocator):
         model = self._get_model()
         if model is None:
             return None
+        # No-op once warmed; only matters if a request beats the startup thread.
+        self._ensure_predictor(model)
 
         orig_h, orig_w = rgb.shape[:2]
 

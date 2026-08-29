@@ -3,15 +3,39 @@
 Thin HTTP layer: read the upload, hand bytes to the image service, return a
 schema. As features land, this handler calls more services and the response
 schema grows — the route logic stays simple.
+
+These handlers are deliberately `def`, not `async def`. Every one of them is
+dominated by synchronous CPU-bound work (OpenCV, PIL, YOLO, SSIM) plus a
+blocking Anthropic call. Declared `async`, that work runs *on* the event loop
+and stalls every other request — /health measured 6.2s during one analysis.
+Starlette runs sync handlers in a threadpool instead, so the loop stays free.
+Do not "modernise" these back to async without moving the work off-thread.
 """
 
-from __future__ import annotations
+# NOTE: deliberately no `from __future__ import annotations` here.
+# slowapi's @limiter.limit wraps the endpoint with functools.wraps, which keeps
+# slowapi's module globals on the wrapper. With postponed evaluation every
+# annotation is a string, so FastAPI then tries to resolve ForwardRef
+# ('UploadFile') against those globals and fails at import with "Invalid args
+# for response field". The `X | None` syntax below is native from 3.10 on, so
+# nothing in this module needs the future import anyway.
 
 import json
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    Form,
+    HTTPException,
+    Request,
+    Response,
+    UploadFile,
+    status,
+)
 
 from app.core.config import Settings, get_settings
+from app.core.rate_limit import limiter
 from app.schemas.analysis import (
     AIAnalysis,
     AIAnalysisResponse,
@@ -30,13 +54,25 @@ from app.services.vision import analysis_pipeline
 
 router = APIRouter(tags=["analysis"])
 
+# Read once at import: these are deployment configuration, not per-request
+# state. The AI endpoints get the tight limit; /analyze gets a looser one
+# because its VLM escalation tier can also spend money (see config.py).
+_AI_RATE_LIMIT = get_settings().ai_rate_limit
+_ANALYZE_RATE_LIMIT = get_settings().analyze_rate_limit
+
 
 @router.post("/analyze", response_model=AnalysisResponse)
-async def analyze(
+@limiter.limit(_ANALYZE_RATE_LIMIT)
+def analyze(
+    # See ai_analysis below — slowapi requires both of these.
+    request: Request,
+    response: Response,
     file: UploadFile = File(...),
     settings: Settings = Depends(get_settings),
 ) -> AnalysisResponse:
-    data = await file.read()
+    # .file is the underlying SpooledTemporaryFile; UploadFile.read() is async
+    # and unusable here. Starlette has already seeked it back to 0.
+    data = file.file.read()
 
     try:
         image_io.validate_upload(
@@ -64,7 +100,15 @@ async def analyze(
 
 
 @router.post("/ai-analysis", response_model=AIAnalysisResponse)
-async def ai_analysis(
+@limiter.limit(_AI_RATE_LIMIT)
+def ai_analysis(
+    # Both are required by slowapi and unused in the body: `request` carries the
+    # client address it keys the limit on, and `response` is where it writes the
+    # X-RateLimit-* headers (the handler returns a model, not a Response, so it
+    # needs FastAPI's injected one). Neither has a default, so both must precede
+    # the parameters that do.
+    request: Request,
+    response: Response,
     file: UploadFile = File(...),
     context: str | None = Form(
         default=None,
@@ -79,7 +123,7 @@ async def ai_analysis(
     this slower vision-language call runs. Accepts the prior /analyze response
     as ``context`` so the model reasons from measured facts.
     """
-    data = await file.read()
+    data = file.file.read()
 
     try:
         image_io.validate_upload(
@@ -106,7 +150,11 @@ async def ai_analysis(
 
 
 @router.post("/color-grade", response_model=ColorGradeResponse)
-async def color_grade(
+@limiter.limit(_AI_RATE_LIMIT)
+def color_grade(
+    # See ai_analysis above — slowapi requires both of these.
+    request: Request,
+    response: Response,
     file: UploadFile = File(...),
     context: str | None = Form(
         default=None,
@@ -120,7 +168,7 @@ async def color_grade(
 
     Same request contract as /ai-analysis: file + optional JSON context.
     """
-    data = await file.read()
+    data = file.file.read()
 
     try:
         image_io.validate_upload(

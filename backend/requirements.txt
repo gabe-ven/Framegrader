@@ -38,3 +38,9 @@ clip @ git+https://github.com/ultralytics/CLIP.git
 # ANTHROPIC_API_KEY is set; silently skipped otherwise, so it never blocks
 # tests/CI without a key.
 anthropic==0.115.0
+
+# Per-IP rate limiting for the paid AI endpoints (app/core/rate_limit.py).
+# /ai-analysis and /color-grade each cost an Anthropic call and sit behind no
+# auth, so an unthrottled caller can drain the API key. Storage defaults to
+# in-memory (per-process); pass a `storage_uri` to share buckets across workers.
+slowapi==0.1.10

@@ -176,8 +176,13 @@ def build_context_summary(context: dict[str, Any] | None) -> str:
             parts.append(f"leading_lines at ~{_fmt(ll.get('dominant_angle'))}°")
         hz = comp.get("horizon") or {}
         if hz.get("horizon_detected"):
-            level = "level" if hz.get("is_level") else f"tilted {_fmt(hz.get('tilt_angle'))}°"
-            parts.append(f"horizon detected ({level})")
+            if hz.get("tilt_reliable"):
+                level = "level" if hz.get("is_level") else f"tilted {_fmt(hz.get('tilt_angle'))}°"
+                parts.append(f"horizon detected ({level})")
+            else:
+                # Tilt estimate is disabled — omit it rather than feed the model
+                # an angle we know is wrong.
+                parts.append("horizon detected")
         sym = comp.get("symmetry") or {}
         if sym.get("is_symmetric"):
             parts.append(f"{_fmt(sym.get('dominant_axis'))} symmetry")

@@ -51,12 +51,15 @@ export function ResultsView({
         onEditPhoto={onEditPhoto}
       />
 
+      {/* Each section owns its own loading state: measurements track the CV
+          request, the critique tracks the (much slower) AI request. They fill
+          in independently rather than the whole report waiting on the slowest. */}
       <div className="space-y-16">
         {status === "success" && (
           <CritiqueSection
             ai={ai}
             exif={result?.exif ?? null}
-            loading={false}
+            loading={aiStatus === "loading"}
             error={aiStatus === "error" ? aiError : null}
             delay={0}
           />
@@ -66,7 +69,7 @@ export function ResultsView({
           composition={result?.composition ?? null}
           semantic={ai?.semantic_composition ?? null}
           imageUrl={previewUrl}
-          loading={false}
+          loading={status === "loading"}
           error={status === "error" ? error : null}
           delay={0.2}
         />

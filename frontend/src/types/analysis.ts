@@ -136,6 +136,9 @@ export interface Horizon {
   horizon_y: number | null;
   is_level: boolean;
   tilt_angle: number | null;
+  /** False while the backend tilt estimator is disabled. When false, never
+   *  display tilt_angle — treat the horizon as level of unknown accuracy. */
+  tilt_reliable: boolean;
 }
 
 export interface Symmetry {

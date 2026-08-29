@@ -49,9 +49,13 @@ export function UploadPanel() {
     setView("results");
   }, [file]);
 
+  // Gated on the CV request only. The AI critique takes ~17s longer than
+  // /analyze, so waiting on it here held the whole report behind a full-screen
+  // animation. Leaving "analyzing" as soon as the measurements land lets the
+  // report paint at ~2s, with the critique streaming into its own skeleton.
   const stage: Stage = !file
     ? "hero"
-    : status === "loading" || aiStatus === "loading"
+    : status === "loading"
       ? "analyzing"
       : status === "idle"
         ? "preview"

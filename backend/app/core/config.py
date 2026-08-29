@@ -20,6 +20,19 @@ class Settings(BaseSettings):
     app_name: str = "FrameGrader"
     allowed_origins: str = "http://localhost:5173"
     max_upload_mb: int = 25
+    # Per-IP cap on the two endpoints whose whole job is a paid Anthropic call.
+    # Any slowapi rate-limit string works ("10/hour", "100/day", "5/minute").
+    ai_rate_limit: str = "10/hour"
+    # /analyze is mostly local CV, but it is not free: the subject locator
+    # escalates to a Claude call whenever YOLO-World misses its confidence gate
+    # (empirically ~2 photos in 3). Hence a limit — set well above normal use so
+    # it only ever stops abuse, not a photographer working through an album.
+    analyze_rate_limit: str = "60/hour"
+    # How many analyses may run at once. The route handlers are synchronous, so
+    # this is the size of the threadpool Starlette runs them in. 0 = auto
+    # (cpu_count, clamped to 2-8). Raise it only alongside the memory to match:
+    # each in-flight request holds a full-resolution decode.
+    analysis_concurrency: int = 0
 
     @property
     def allowed_origins_list(self) -> list[str]:

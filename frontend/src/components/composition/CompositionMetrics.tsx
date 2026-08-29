@@ -41,6 +41,7 @@ function buildMetrics(
   const ed = c.edge_density;
   const hz = c.horizon;
   const symStrength = Math.max(sym.vertical, sym.horizontal);
+  const horizonTilted = hz.horizon_detected && hz.tilt_reliable && !hz.is_level;
   const sll = semantic?.leading_lines;
   const srot = semantic?.rule_of_thirds;
   const sns = semantic?.negative_space;
@@ -152,15 +153,13 @@ function buildMetrics(
       key: "horizon",
       label: "Horizon",
       icon: <HorizonIcon />,
-      value: hz.horizon_detected
-        ? hz.is_level
-          ? "Level"
-          : `Tilted ${hz.tilt_angle}°`
-        : "None",
+      // Tilt is only shown when the backend vouches for it; otherwise the
+      // horizon reads as "Level" and only its row position is reported.
+      value: hz.horizon_detected ? (horizonTilted ? `Tilted ${hz.tilt_angle}°` : "Level") : "None",
       explanation: hz.horizon_detected
         ? `Detected at ${Math.round((hz.horizon_y ?? 0) * 100)}% height.`
         : "No clear horizon line.",
-      status: hz.horizon_detected ? (hz.is_level ? "good" : "warn") : "neutral",
+      status: hz.horizon_detected ? (horizonTilted ? "warn" : "good") : "neutral",
     },
   ];
 }

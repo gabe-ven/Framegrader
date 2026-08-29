@@ -27,6 +27,13 @@ This multi-candidate, multi-pass approach handles:
 - Photos where the waterline is weaker than a nearby structural edge
 - Urban waterfronts where the "sky" above is slightly noisy (city haze)
 - Silhouette buildings whose top edge would otherwise look like a horizon
+
+Tilt is measured separately, and only from the detected horizon itself:
+sample one sub-pixel edge row per column band inside a narrow strip around
+the detected row, fit a line through those samples with a Theil-Sen (median
+pairwise slope) estimator, and accept the result only if enough bands across
+enough of the frame width agree with it.  When they do not, `tilt_reliable`
+is False and `tilt_angle` is 0.0 — consumers must not display a tilt then.
 """
 
 from __future__ import annotations
@@ -61,6 +68,28 @@ _WIN_FRAC = 0.08
 # Y margins — horizons rarely sit at the very top or bottom.
 _Y_MARGIN_FRAC = 0.08
 _LEVEL_TOLERANCE_DEG = 3.0
+
+# --- Tilt estimation parameters ---
+# Only rows within this fraction of the frame height of the detected horizon
+# are searched. Anything further away is a different feature, not the horizon.
+_TILT_STRIP_FRAC = 0.15
+# Column bands sampled across the width; each yields at most one observation.
+# Summing within a band suppresses per-pixel noise before taking the argmax.
+_TILT_BANDS = 48
+# A band's peak must clear this multiple of the frame-mean gradient (an edge is
+# actually there) and this multiple of the band's own mean inside the strip
+# (the profile has a real peak rather than a flat, argmax-is-noise ramp).
+_TILT_BAND_ABS = 1.0
+_TILT_BAND_REL = 1.5
+# Fit acceptance. A tilt is only reported when this many bands survive, that
+# share of them sits within the residual tolerance, and those agreeing bands
+# span this fraction of the frame width.
+_TILT_MIN_BANDS = 8
+_TILT_INLIER_TOL_FRAC = 0.02   # × height, floored at 2 px
+_TILT_MIN_INLIER_RATIO = 0.60
+_TILT_MIN_SPAN_FRAC = 0.50
+# Past this angle the fitted line is some other structure, not a horizon.
+_TILT_MAX_DEG = 30.0
 
 
 def _check_candidate(
@@ -106,6 +135,128 @@ def _check_candidate(
     )
 
 
+def _subpixel_peak(profile: np.ndarray, idx: int) -> float:
+    """Refine an integer argmax to sub-row precision by parabolic interpolation.
+
+    Band argmaxes are whole rows, and that quantisation is the dominant error
+    in the slope fit for shallow tilts — a 1 px step across the frame is
+    already ~0.2°. Fitting a parabola through the peak and its two neighbours
+    recovers the fractional row.
+    """
+    if idx <= 0 or idx >= len(profile) - 1:
+        return float(idx)
+    a, b, c = float(profile[idx - 1]), float(profile[idx]), float(profile[idx + 1])
+    denom = a - 2.0 * b + c
+    if denom == 0.0:
+        return float(idx)
+    offset = 0.5 * (a - c) / denom
+    return float(idx) + max(-1.0, min(1.0, offset))
+
+
+def _sample_edge_rows(
+    sobel_y: np.ndarray,
+    peak: int,
+    height: int,
+    width: int,
+    global_mean_pp: float,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Locate the horizon edge once per column band within a strip around *peak*.
+
+    Returns (xs, ys): band centre columns and their sub-pixel edge rows. Bands
+    with no convincing edge are dropped rather than contributing a guess.
+    """
+    half_strip = max(3, int(_TILT_STRIP_FRAC * height))
+    r0 = max(0, peak - half_strip)
+    r1 = min(height, peak + half_strip + 1)
+    if r1 - r0 < 3:
+        return np.empty(0), np.empty(0)
+
+    n_bands = min(_TILT_BANDS, width)
+    edges = np.linspace(0, width, n_bands + 1).astype(int)
+
+    xs: list[float] = []
+    ys: list[float] = []
+    for i in range(n_bands):
+        c0, c1 = int(edges[i]), int(edges[i + 1])
+        if c1 <= c0:
+            continue
+        profile = sobel_y[r0:r1, c0:c1].mean(axis=1)
+        idx = int(np.argmax(profile))
+        # An argmax pinned to the strip boundary means the true maximum lies
+        # outside the window — that band is looking at something else.
+        if idx == 0 or idx == len(profile) - 1:
+            continue
+        band_peak = float(profile[idx])
+        if band_peak < _TILT_BAND_ABS * global_mean_pp:
+            continue  # no edge worth calling an edge in this band
+        if band_peak < _TILT_BAND_REL * float(profile.mean()):
+            continue  # profile too flat — the argmax is noise, not a peak
+        xs.append((c0 + c1 - 1) / 2.0)
+        ys.append(r0 + _subpixel_peak(profile, idx))
+
+    return np.asarray(xs, dtype=np.float64), np.asarray(ys, dtype=np.float64)
+
+
+def _theil_sen(xs: np.ndarray, ys: np.ndarray) -> tuple[float, float] | None:
+    """Median of all pairwise slopes, plus the median intercept.
+
+    Chosen over least squares because a minority of bands can still sit on an
+    unrelated edge (a roofline clipping the strip); the median ignores them,
+    where a squared-error fit would be dragged toward them.
+    """
+    i, j = np.triu_indices(len(xs), k=1)
+    dx = xs[j] - xs[i]
+    ok = dx != 0
+    if not np.any(ok):
+        return None
+    slope = float(np.median((ys[j][ok] - ys[i][ok]) / dx[ok]))
+    intercept = float(np.median(ys - slope * xs))
+    return slope, intercept
+
+
+def _estimate_tilt(
+    sobel_y: np.ndarray,
+    peak: int,
+    height: int,
+    width: int,
+    global_mean_pp: float,
+) -> tuple[float, bool]:
+    """Return (tilt_degrees, reliable) for the horizon detected at row *peak*.
+
+    Positive tilt means the right-hand side of the horizon sits lower in the
+    frame. Returns (0.0, False) whenever the evidence does not support an
+    angle, so callers never have to distinguish "level" from "unknown".
+    """
+    xs, ys = _sample_edge_rows(sobel_y, peak, height, width, global_mean_pp)
+    if len(xs) < _TILT_MIN_BANDS:
+        return 0.0, False
+
+    fit = _theil_sen(xs, ys)
+    if fit is None:
+        return 0.0, False
+    slope, intercept = fit
+
+    tol = max(2.0, _TILT_INLIER_TOL_FRAC * height)
+    inliers = np.abs(ys - (slope * xs + intercept)) <= tol
+    n_inliers = int(inliers.sum())
+    if n_inliers < _TILT_MIN_BANDS or n_inliers < _TILT_MIN_INLIER_RATIO * len(xs):
+        return 0.0, False  # the bands disagree; no single line explains them
+
+    # The agreeing bands must also be spread out. A tight cluster of inliers
+    # pins down a point, not a slope.
+    span = float(xs[inliers].max() - xs[inliers].min())
+    if span < _TILT_MIN_SPAN_FRAC * width:
+        return 0.0, False
+
+    # Theil-Sen finds the consensus; least squares on the inliers alone then
+    # sharpens it now that the outliers are gone.
+    slope = float(np.polyfit(xs[inliers], ys[inliers], 1)[0])
+    tilt = math.degrees(math.atan(slope))
+    if abs(tilt) > _TILT_MAX_DEG:
+        return 0.0, False
+    return tilt, True
+
+
 def detect_horizon(image: np.ndarray) -> dict:
     gray = to_gray_u8(image).astype(np.float64)
     height, width = gray.shape
@@ -115,6 +266,7 @@ def detect_horizon(image: np.ndarray) -> dict:
         "horizon_y": None,
         "is_level": False,
         "tilt_angle": None,
+        "tilt_reliable": False,
     }
     if height < 10 or width < 10:
         return not_found
@@ -166,14 +318,16 @@ def detect_horizon(image: np.ndarray) -> dict:
     if peak is None:
         return not_found
 
-    half = width // 2
-    left_peak = int(np.argmax(sobel_y[:, :half].sum(axis=1)))
-    right_peak = int(np.argmax(sobel_y[:, half:].sum(axis=1)))
-    tilt = math.degrees(math.atan2(right_peak - left_peak, max(half, 1)))
+    # Tilt is fitted to the edge at `peak` itself. The previous version instead
+    # compared the vertical-gradient argmax of the left half against that of the
+    # right half — two independent maxima over the whole frame that need not lie
+    # on the horizon at all, which reported 9-17 degrees on level photos.
+    tilt, tilt_reliable = _estimate_tilt(sobel_y, peak, height, width, global_mean_pp)
 
     return {
         "horizon_detected": True,
         "horizon_y": round(peak / max(height - 1, 1), 3),
         "is_level": bool(abs(tilt) <= _LEVEL_TOLERANCE_DEG),
         "tilt_angle": round(tilt, 2),
+        "tilt_reliable": tilt_reliable,
     }

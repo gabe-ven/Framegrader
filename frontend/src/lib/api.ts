@@ -15,6 +15,20 @@ export const ACCEPTED_TYPES = [
 
 export class ApiError extends Error {}
 
+/**
+ * Origin the API is served from, baked in at build time.
+ *
+ * Defaults to "" so every call stays a same-origin relative path — what the
+ * Vite dev proxy expects, and what a reverse proxy serving the SPA and the API
+ * together expects. Set VITE_API_BASE_URL only when the two are on different
+ * origins (static hosting for the SPA plus a separate API host), in which case
+ * that origin must also appear in the backend's ALLOWED_ORIGINS.
+ *
+ * A trailing slash is stripped so "https://api.example.com/" and
+ * "https://api.example.com" both produce a single-slash URL.
+ */
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? "").replace(/\/+$/, "");
+
 /** Client-side guardrails that mirror the backend's validation. */
 export function validateFile(file: File): string | null {
   if (!ACCEPTED_TYPES.includes(file.type)) {
@@ -26,8 +40,9 @@ export function validateFile(file: File): string | null {
   return null;
 }
 
-async function postForm<T>(endpoint: string, body: FormData): Promise<T> {
-  const res = await fetch(endpoint, { method: "POST", body });
+/** Callers pass an API path; the configured base is applied in one place. */
+async function postForm<T>(path: string, body: FormData): Promise<T> {
+  const res = await fetch(`${API_BASE_URL}${path}`, { method: "POST", body });
 
   if (!res.ok) {
     let detail = `Request failed (${res.status}).`;

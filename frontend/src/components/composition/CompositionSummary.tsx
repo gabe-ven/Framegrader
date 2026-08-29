@@ -33,9 +33,9 @@ export function CompositionSummary({
     `Strongest: ${strongest.axis} (${Math.round(strongest.value)}/100).`,
     `Weakest: ${weakest.axis} (${Math.round(weakest.value)}/100).`,
     hz.horizon_detected
-      ? hz.is_level
-        ? "Horizon is level."
-        : `Horizon tilts ${Math.abs(hz.tilt_angle ?? 0).toFixed(1)}°.`
+      ? hz.tilt_reliable && !hz.is_level
+        ? `Horizon tilts ${Math.abs(hz.tilt_angle ?? 0).toFixed(1)}°.`
+        : "Horizon is level."
       : "No clear horizon detected.",
     `Frame detail is ${composition.edge_density.busyness}.`,
   ];
