@@ -25,9 +25,9 @@ rendered as overlays and scores in the React frontend.
 # Backend (Python 3.13)
 cd backend
 python -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
-cp .env.example .env            # set ANTHROPIC_API_KEY to enable the VLM tier
-uvicorn app.main:app --reload   # http://localhost:8000
+pip install -r requirements.lock   # pinned transitively — see note below
+cp .env.example .env               # set ANTHROPIC_API_KEY to enable the VLM tier
+uvicorn app.main:app --reload      # http://localhost:8000
 
 # Frontend
 cd frontend
@@ -43,9 +43,52 @@ cp eval/ground_truth.example.json eval/ground_truth.json  # fill in judgments
 backend/.venv/bin/python eval/run_eval.py
 ```
 
-Notes: YOLO-World weights (~25 MB) auto-download on first use; the first analysis
-after a cold start takes ~30 s while the model loads (warmed in a background thread
-at startup). Without `ANTHROPIC_API_KEY` the VLM tier is silently skipped.
+Notes: YOLO-World weights (~25 MB) auto-download on first use, and both the model
+and its predictor are warmed in a background thread at startup — so the first
+analysis runs at normal speed rather than paying a cold-start penalty. Without
+`ANTHROPIC_API_KEY` the VLM tier is silently skipped.
+
+**Install from `requirements.lock`, not `requirements.txt`.** The former pins every
+transitive dependency; the latter pins only direct ones and re-resolves the rest on
+each install. That difference is not theoretical: `ultralytics` declares an unpinned
+dependency on `opencv-python`, which shares its `cv2` module directory with our
+pinned `opencv-python-headless`, so the effective OpenCV version was whichever pip
+wrote last. CI resolved OpenCV 5.0 the day it shipped while dev machines stayed on
+4.x, and `LineSegmentDetector` changed its return shape between those majors —
+green locally, ten failures in CI. Both OpenCV pins must move together.
+
+Regenerate the lock after changing `requirements.txt`:
+
+```bash
+pip install -r requirements.txt
+pip freeze | grep -viE '^(pytest|pluggy|iniconfig)==' > requirements.lock
+```
+
+## Deployment
+
+```bash
+docker build -t framegrader-api backend/
+docker run -p 8000:8000 --env-file backend/.env framegrader-api
+```
+
+The image installs from the lock, bakes the detector weights in at build time, uses
+CPU-only torch (the default CUDA wheels add ~2 GB for a GPU it will never see), and
+runs as a non-root user with a `/health` healthcheck.
+
+Two things to get right in front of it:
+
+- **Set `FORWARDED_ALLOW_IPS` to your proxy's address.** Per-IP rate limiting reads
+  `X-Forwarded-For`; uvicorn only trusts `127.0.0.1` by default, so behind a proxy
+  every request otherwise shares one bucket and a single user throttles everyone.
+  Do not set it to `*` on a directly-exposed container — a client could then spoof
+  its address and evade the limit entirely.
+- **Scale with replicas, not `--workers`.** The rate limiter's storage is in-process
+  (N workers = N x the configured limit) and each worker loads its own copy of the
+  model. Multiple replicas need a shared Redis backend for slowapi.
+
+The frontend builds to static files. Set `VITE_API_BASE_URL` at build time when the
+SPA is served from a different origin than the API, and add that origin to the
+backend's `ALLOWED_ORIGINS` (see `frontend/.env.example`).
 
 ## Architecture
 

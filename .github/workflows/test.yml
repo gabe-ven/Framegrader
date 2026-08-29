@@ -16,14 +16,17 @@ jobs:
         with:
           python-version: "3.13"
           cache: pip
-          cache-dependency-path: backend/requirements.txt
+          cache-dependency-path: backend/requirements.lock
 
-      # requirements.txt includes torch/ultralytics — heavy, but the pip cache
-      # keeps repeat runs fast. Tests degrade gracefully without model weights
-      # or an ANTHROPIC_API_KEY (VLM/detector paths are mocked or fall back).
+      # Installs the LOCK, not requirements.txt. Resolving transitively on each
+      # run is what silently moved CI to OpenCV 5.0 the day it shipped, breaking
+      # leading-line detection here while dev machines stayed green on 4.x.
+      # Heavy (torch/ultralytics), but the pip cache keeps repeat runs fast.
+      # Tests degrade gracefully without model weights or an ANTHROPIC_API_KEY
+      # (VLM/detector paths are mocked or fall back).
       - name: Install dependencies
         run: |
-          pip install -r backend/requirements.txt
+          pip install -r backend/requirements.lock
           pip install pytest
 
       - name: Run backend tests

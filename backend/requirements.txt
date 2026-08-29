@@ -4,7 +4,18 @@ python-multipart==0.0.20
 pydantic==2.10.4
 pydantic-settings==2.7.1
 pillow==11.1.0
+# Both OpenCV distributions end up installed: this pin is ours (headless keeps
+# the GUI/X11 libs out of a server image), and ultralytics declares a hard,
+# UNPINNED dependency on opencv-python. They share the same `cv2` module
+# directory, so whichever pip installs last wins — meaning the effective
+# version was whatever was newest on PyPI the day the env was built.
+#
+# That is how OpenCV 5.0 reached CI while dev machines stayed on 4.x, changing
+# LineSegmentDetector's return shape and breaking leading-line detection in CI
+# only. Pinning both to the same version makes install order irrelevant, so
+# CI, prod, and every laptop agree. Bump them together, never singly.
 opencv-python-headless==4.11.0.86
+opencv-python==4.11.0.86
 numpy==2.2.1
 
 # Structural similarity (SSIM) for symmetry.py — mean-brightness-difference

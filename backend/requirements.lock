@@ -1,0 +1,93 @@
+# Fully-pinned resolution of requirements.txt, including every transitive
+# dependency. Generated with: pip freeze (test-only packages removed).
+#
+# WHY THIS EXISTS: requirements.txt pins only direct dependencies, so the
+# transitive set was resolved fresh on every install. That is how CI ended
+# up on OpenCV 5.0 while dev machines sat on 4.x — same requirements file,
+# different result, tests passing locally and failing in CI. Deployments
+# and CI should install from THIS file so every environment is identical.
+#
+#   pip install -r requirements.lock
+#
+# Regenerate after any change to requirements.txt:
+#   pip install -r requirements.txt && pip freeze | grep -viE '^(pytest|pluggy|iniconfig)==' > requirements.lock
+#
+# Note: version strings are portable, but a few wheels are
+# platform-specific. Regenerate on Linux if a macOS-built lock ever
+# resolves differently in the container.
+
+annotated-types==0.7.0
+anthropic==0.115.0
+anyio==4.14.1
+certifi==2026.6.17
+charset-normalizer==3.4.7
+click==8.4.2
+clip @ git+https://github.com/ultralytics/CLIP.git@16be45c7062240d445cce764f2afd9454a91ef7e
+contourpy==1.3.3
+cycler==0.12.1
+Deprecated==1.3.1
+distro==1.9.0
+docstring_parser==0.18.0
+fastapi==0.115.6
+filelock==3.29.4
+fonttools==4.63.0
+fsspec==2026.6.0
+ftfy==6.3.1
+h11==0.16.0
+httpcore==1.0.9
+httptools==0.8.0
+httpx==0.28.1
+idna==3.18
+ImageIO==2.37.3
+Jinja2==3.1.6
+jiter==0.16.0
+kiwisolver==1.5.0
+lazy-loader==0.5
+limits==5.8.0
+MarkupSafe==3.0.3
+matplotlib==3.11.0
+mpmath==1.3.0
+networkx==3.6.1
+numpy==2.2.1
+nvidia-ml-py==13.610.43
+opencv-python==4.11.0.86
+opencv-python-headless==4.11.0.86
+packaging==26.2
+pi_heif==1.4.0
+pillow==11.1.0
+polars==1.42.0
+polars-runtime-32==1.42.0
+psutil==7.2.2
+pydantic==2.10.4
+pydantic-settings==2.7.1
+pydantic_core==2.27.2
+Pygments==2.20.0
+pyparsing==3.3.2
+python-dateutil==2.9.0.post0
+python-dotenv==1.2.2
+python-multipart==0.0.20
+PyYAML==6.0.3
+regex==2026.6.28
+requests==2.34.2
+scikit-image==0.25.0
+scipy==1.18.0
+setuptools==82.0.1
+six==1.17.0
+slowapi==0.1.10
+sniffio==1.3.1
+starlette==0.41.3
+sympy==1.13.1
+tifffile==2026.6.1
+torch==2.6.0
+torchvision==0.21.0
+tqdm==4.68.3
+typing_extensions==4.15.0
+ultralytics==8.4.83
+ultralytics-thop==2.0.20
+urllib3==2.7.0
+uvicorn==0.34.0
+uvloop==0.22.1
+watchfiles==1.2.0
+wcwidth==0.8.2
+websockets==16.0
+wrapt==2.3.0

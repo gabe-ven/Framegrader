@@ -33,6 +33,11 @@ class Settings(BaseSettings):
     # (cpu_count, clamped to 2-8). Raise it only alongside the memory to match:
     # each in-flight request holds a full-resolution decode.
     analysis_concurrency: int = 0
+    # Root log level. uvicorn does not configure app loggers, so without our
+    # own setup (app/core/logging.py) every warning this codebase emits is
+    # discarded. DEBUG is very chatty — ultralytics and PIL are capped at
+    # WARNING regardless so the app's own records stay readable.
+    log_level: str = "INFO"
 
     @property
     def allowed_origins_list(self) -> list[str]:

@@ -28,7 +28,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "backend"))
 
-from PIL import Image  # noqa: E402
+from PIL import Image, ImageOps  # noqa: E402
 
 # Load .env so ANTHROPIC_API_KEY and other backend env vars are available
 # when running the eval script directly (outside the server process).
@@ -198,7 +198,12 @@ def main() -> None:
             print(f"⚠️  Skipping {name} — no ground_truth.json entry")
             continue
 
-        image = Image.open(photo_path)
+        # exif_transpose matters: 8 of 11 sample photos are stored landscape
+        # with an orientation tag that displays them portrait. The API applies
+        # it (image_io.open_image), so without it here the harness scored the
+        # pipeline on a sideways image — every angle judgment off by 90 degrees
+        # against ground truth recorded for the upright photo.
+        image = ImageOps.exif_transpose(Image.open(photo_path))
         result = run_composition_analysis(image)
 
         for axis, check_fn in CHECKS.items():

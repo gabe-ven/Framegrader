@@ -15,6 +15,10 @@ _MAX_PIXELS_FOR_KMEANS = 4096
 # so it's sized for visual density rather than statistical accuracy.
 _MAX_COLOR_SAMPLES = 500
 
+# Fixed seed for OpenCV's (thread-local) RNG so k-means clustering is
+# reproducible; matches the seed used for GrabCut in subject_localization.
+_CV_RNG_SEED = 42
+
 
 def dominant_colors(image: np.ndarray, k: int = 5) -> list[dict]:
     """Return up to `k` dominant colors, sorted by coverage (most first).
@@ -45,6 +49,12 @@ def dominant_colors(image: np.ndarray, k: int = 5) -> list[dict]:
         counts = distinct_counts
     else:
         criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 20, 1.0)
+        # KMEANS_PP_CENTERS draws its initial centers from OpenCV's RNG, so the
+        # same photo produced a different palette on every call. The pixel
+        # subsample above is already seeded; seeding here makes the clustering
+        # reproducible too. cv2's RNG is thread-local, so this stays confined to
+        # the calling thread.
+        cv2.setRNGSeed(_CV_RNG_SEED)
         _, labels, centers = cv2.kmeans(
             pixels.astype(np.float32), k, None, criteria, 3, cv2.KMEANS_PP_CENTERS
         )

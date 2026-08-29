@@ -366,6 +366,10 @@ def _best_box(
 
 _GRABCUT_MAX_EDGE = 1024  # downsample to this before running GrabCut
 
+# Fixed seed for OpenCV's (thread-local) RNG so GrabCut is reproducible.
+# Any constant works; the value is arbitrary, the fixedness is the point.
+_CV_RNG_SEED = 42
+
 
 def _refine_mask(
     rgb: np.ndarray, box: tuple[int, int, int, int]
@@ -416,6 +420,15 @@ def _refine_mask(
     gc_mask = np.zeros((small_h, small_w), dtype=np.uint8)
     bgd_model = np.zeros((1, 65), dtype=np.float64)
     fgd_model = np.zeros((1, 65), dtype=np.float64)
+
+    # GrabCut seeds its internal GMMs from OpenCV's RNG, so an unseeded run
+    # gives a different mask every time — measured a 2.3x swing in mask area on
+    # identical input, which moved the subject centroid enough to change its
+    # rule-of-thirds score and its 3x3 region. That made composition metrics
+    # irreproducible and the eval harness unable to attribute a score change to
+    # a code change. cv2's RNG is thread-local, so seeding here is confined to
+    # the request's own thread and safe under the handler threadpool.
+    cv2.setRNGSeed(_CV_RNG_SEED)
 
     try:
         cv2.grabCut(
