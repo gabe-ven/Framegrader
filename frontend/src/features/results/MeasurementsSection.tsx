@@ -8,6 +8,7 @@ import {
 } from "@/components/composition/compositionProfile";
 import { DataStrip, type DataStripItem } from "@/components/DataStrip";
 import { DominantColors } from "@/components/DominantColors";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { LuminanceChart } from "@/components/LuminanceChart";
 import { RGBHistogram } from "@/components/RGBHistogram";
 import { Section } from "@/components/Section";
@@ -177,7 +178,9 @@ function MeasurementsContent({
       </div>
       <hr className="my-8" />
 
-      <ColorSpaceCloud samples={vision.color_samples} />
+      <ErrorBoundary label="Color space">
+        <ColorSpaceCloud samples={vision.color_samples} />
+      </ErrorBoundary>
     </div>
   );
 }

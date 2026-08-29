@@ -42,34 +42,51 @@ export function LuminanceChart({ histogram }: { histogram: Histogram }) {
       <span className="font-mono text-[10px] uppercase tracking-widest text-muted">
         Luminance
       </span>
-      <svg
-        viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
-        preserveAspectRatio="none"
-        className="mt-2 h-[180px] w-full"
-        aria-label="Luminance distribution"
-      >
-        <motion.path
-          d={path}
-          fill="rgba(20,20,18,0.06)"
-          stroke="#141412"
-          strokeWidth={1}
-          initial={{ pathLength: 0, fillOpacity: 0 }}
-          animate={{ pathLength: 1, fillOpacity: 1 }}
-          transition={{ duration: 0.8, ease: "easeOut" }}
-        />
-        <line
-          x1={meanX}
-          x2={meanX}
-          y1={0}
-          y2={VIEW_H}
-          stroke="#8c8880"
-          strokeWidth={1}
-          strokeDasharray="3 3"
-        />
-        <text x={meanX + 4} y={10} className="fill-muted font-mono text-[9px] uppercase">
-          Mean
-        </text>
-      </svg>
+      <div className="mt-2 border-b border-border">
+        <svg
+          viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
+          preserveAspectRatio="none"
+          className="block h-[180px] w-full"
+          aria-label="Luminance distribution"
+        >
+          <defs>
+            {/* Very subtle tonal fill — a faint dark wash on the left tapering
+                to near-white on the right, just enough to read as shape. */}
+            <linearGradient id="lum-fill" x1="0" x2="1">
+              <stop offset="0%" stopColor="#000000" stopOpacity="0.08" />
+              <stop offset="100%" stopColor="#000000" stopOpacity="0.02" />
+            </linearGradient>
+          </defs>
+          <motion.path
+            d={path}
+            fill="url(#lum-fill)"
+            stroke="#0a0a0a"
+            strokeWidth={1.5}
+            initial={{ pathLength: 0, fillOpacity: 0 }}
+            animate={{ pathLength: 1, fillOpacity: 1 }}
+            transition={{ duration: 0.8, ease: "easeOut" }}
+          />
+          <line
+            x1={meanX}
+            x2={meanX}
+            y1={0}
+            y2={VIEW_H}
+            stroke="#0a0a0a"
+            strokeWidth={1}
+            strokeDasharray="3 3"
+          />
+          <text x={meanX + 4} y={10} className="fill-muted font-mono text-[8px] uppercase">
+            Mean
+          </text>
+        </svg>
+      </div>
+      {/* Zone System terminology — shadows / midtones / highlights across the
+          tonal axis, echoing how photographers read exposure. */}
+      <div className="mt-1.5 flex justify-between font-mono text-[8px] uppercase tracking-widest text-subtle">
+        <span>Shadows</span>
+        <span>Midtones</span>
+        <span>Highlights</span>
+      </div>
     </div>
   );
 }

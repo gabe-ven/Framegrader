@@ -11,29 +11,68 @@ export interface EditCanvasHandle {
   exportJPEG: () => Promise<Blob | null>;
 }
 
+/** "before" = original pixels, "after" = fully edited, "split" = both, divided at splitPosition. */
+export type CompareMode = "before" | "after" | "split";
+
 interface EditCanvasProps {
   file: File;
   adjustments: GradingAdjustments;
+  /** Optional per-channel tone-curve LUT, layered on top of `adjustments`. */
+  curveLut?: Uint8ClampedArray | null;
+  mode: CompareMode;
+  /** Fraction (0–1) of canvas width shown as "before" when mode is "split". */
+  splitPosition: number;
 }
 
 export const EditCanvas = forwardRef<EditCanvasHandle, EditCanvasProps>(function EditCanvas(
-  { file, adjustments },
+  { file, adjustments, curveLut, mode, splitPosition },
   ref,
 ) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const imageRef = useRef<HTMLImageElement | null>(null);
   const sourceDataRef = useRef<ImageData | null>(null);
   const adjustmentsRef = useRef(adjustments);
+  const curveLutRef = useRef(curveLut);
+  const modeRef = useRef(mode);
+  const splitPositionRef = useRef(splitPosition);
   const rafRef = useRef<number | null>(null);
 
   adjustmentsRef.current = adjustments;
+  curveLutRef.current = curveLut;
+  modeRef.current = mode;
+  splitPositionRef.current = splitPosition;
 
   function render() {
     const canvas = canvasRef.current;
     const source = sourceDataRef.current;
     const ctx = canvas?.getContext("2d");
     if (!canvas || !source || !ctx) return;
-    ctx.putImageData(processImageData(source, adjustmentsRef.current), 0, 0);
+
+    if (modeRef.current === "before") {
+      ctx.putImageData(source, 0, 0);
+      return;
+    }
+
+    const edited = processImageData(source, adjustmentsRef.current, curveLutRef.current);
+
+    if (modeRef.current === "after") {
+      ctx.putImageData(edited, 0, 0);
+      return;
+    }
+
+    // Split: left of the divider is original pixels, right is edited.
+    const composite = new ImageData(
+      new Uint8ClampedArray(edited.data),
+      edited.width,
+      edited.height,
+    );
+    const splitX = Math.round(edited.width * splitPositionRef.current);
+    for (let y = 0; y < edited.height; y++) {
+      const rowStart = y * edited.width * 4;
+      const rowEnd = rowStart + splitX * 4;
+      composite.data.set(source.data.subarray(rowStart, rowEnd), rowStart);
+    }
+    ctx.putImageData(composite, 0, 0);
   }
 
   // Decode the original file once per selection (own object URL, independent
@@ -74,8 +113,8 @@ export const EditCanvas = forwardRef<EditCanvasHandle, EditCanvasProps>(function
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [file]);
 
-  // Redraw on adjustment change, batched to one paint per frame so
-  // dragging a slider stays smooth.
+  // Redraw on adjustment or compare-mode change, batched to one paint per
+  // frame so dragging a slider (or the split divider) stays smooth.
   useEffect(() => {
     if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
     rafRef.current = requestAnimationFrame(render);
@@ -83,7 +122,7 @@ export const EditCanvas = forwardRef<EditCanvasHandle, EditCanvasProps>(function
       if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [adjustments]);
+  }, [adjustments, curveLut, mode, splitPosition]);
 
   useImperativeHandle(
     ref,
@@ -99,7 +138,11 @@ export const EditCanvas = forwardRef<EditCanvasHandle, EditCanvasProps>(function
         if (!ctx) return null;
         ctx.drawImage(img, 0, 0);
         const fullData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-        ctx.putImageData(processImageData(fullData, adjustmentsRef.current), 0, 0);
+        ctx.putImageData(
+          processImageData(fullData, adjustmentsRef.current, curveLutRef.current),
+          0,
+          0,
+        );
 
         return new Promise((resolve) => {
           canvas.toBlob((blob) => resolve(blob), "image/jpeg", 0.92);

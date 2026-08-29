@@ -141,6 +141,15 @@ function boxBlur3x3(data: Uint8ClampedArray, width: number, height: number): Uin
   return out;
 }
 
+/** Per-channel tone curve: remap every R/G/B value through a 256-entry LUT. */
+function applyCurveLUT(data: Uint8ClampedArray, lut: Uint8ClampedArray): void {
+  for (let i = 0; i < data.length; i += 4) {
+    data[i] = lut[data[i]];
+    data[i + 1] = lut[data[i + 1]];
+    data[i + 2] = lut[data[i + 2]];
+  }
+}
+
 /** Unsharp mask: blur a copy, then push the original away from the blur. */
 function applySharpness(imageData: ImageData, sharpness: number): void {
   if (sharpness <= 0) return;
@@ -156,10 +165,19 @@ function applySharpness(imageData: ImageData, sharpness: number): void {
   }
 }
 
-/** Runs the full pipeline (tonal + sharpness) on a fresh copy of `source`. */
-export function processImageData(source: ImageData, adjustments: GradingAdjustments): ImageData {
+/**
+ * Runs the full pipeline on a fresh copy of `source`, in order:
+ * tonal adjustments -> tone curve (if any) -> sharpness. The tone curve is an
+ * optional per-channel LUT layered on top of the slider adjustments.
+ */
+export function processImageData(
+  source: ImageData,
+  adjustments: GradingAdjustments,
+  curveLut?: Uint8ClampedArray | null,
+): ImageData {
   const data = new Uint8ClampedArray(source.data);
   applyTonalAdjustments(data, adjustments);
+  if (curveLut) applyCurveLUT(data, curveLut);
   const result = new ImageData(data, source.width, source.height);
   applySharpness(result, adjustments.sharpness);
   return result;

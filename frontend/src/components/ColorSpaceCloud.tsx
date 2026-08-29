@@ -5,8 +5,8 @@ import * as THREE from "three";
 
 const CUBE_SIZE = 2;
 const HALF = CUBE_SIZE / 2;
-const MIN_RADIUS = 0.008;
-const MAX_RADIUS = 0.025;
+const MIN_RADIUS = 0.018;
+const MAX_RADIUS = 0.045;
 // Quantization step (0-255) used to bucket similar sampled colors together
 // when estimating per-point frequency weight — the backend sends raw,
 // unweighted pixel samples, so "common colors" are inferred client-side.
@@ -19,7 +19,32 @@ interface ColorSpaceCloudProps {
   samples: number[][];
 }
 
+/** Centroid of the sampled colors, mapped into the same cube space the
+ * points themselves are plotted in (see PointCloud below) — so the camera
+ * and OrbitControls can center on where the data actually sits instead of
+ * the cube's geometric middle, which is often mostly empty space. */
+function computeCentroid(samples: number[][]): THREE.Vector3 {
+  if (samples.length === 0) return new THREE.Vector3(0, 0, 0);
+  const sum = samples.reduce(
+    (acc, [r, g, b]) => {
+      acc.x += r / 255;
+      acc.y += g / 255;
+      acc.z += b / 255;
+      return acc;
+    },
+    { x: 0, y: 0, z: 0 },
+  );
+  const n = samples.length;
+  return new THREE.Vector3(
+    (sum.x / n) * CUBE_SIZE - HALF,
+    (sum.y / n) * CUBE_SIZE - HALF,
+    (sum.z / n) * CUBE_SIZE - HALF,
+  );
+}
+
 export function ColorSpaceCloud({ samples }: ColorSpaceCloudProps) {
+  const centroid = useMemo(() => computeCentroid(samples), [samples]);
+
   if (samples.length === 0) {
     return null;
   }
@@ -29,8 +54,14 @@ export function ColorSpaceCloud({ samples }: ColorSpaceCloudProps) {
       <span className="font-mono text-[10px] uppercase tracking-widest text-muted">
         Color space
       </span>
-      <div className="mt-2 h-[420px] w-full">
-        <Canvas camera={{ position: [2.2, 1.6, 2.2], fov: 45 }} dpr={[1, 2]}>
+      <div className="mt-2 h-[480px] w-full border border-[#e0e0e0] bg-transparent shadow-[0_1px_3px_rgba(0,0,0,0.08)]">
+        <Canvas
+          camera={{
+            position: [centroid.x + 2.2, centroid.y + 1.6, centroid.z + 2.2],
+            fov: 45,
+          }}
+          dpr={[1, 2]}
+        >
           <ambientLight intensity={0.6} />
           <directionalLight position={[3, 4, 2]} intensity={0.8} />
           <PointCloud samples={samples} />
@@ -38,22 +69,19 @@ export function ColorSpaceCloud({ samples }: ColorSpaceCloudProps) {
           <GridFloor />
           <AxisTicks />
           <OrbitControls
-            target={[0, 0, 0]}
+            target={[centroid.x, centroid.y, centroid.z]}
             enablePan={false}
             enableDamping
             dampingFactor={0.08}
             autoRotate
-            autoRotateSpeed={1.2}
+            autoRotateSpeed={1.5}
             minDistance={2.5}
             maxDistance={7}
           />
         </Canvas>
       </div>
-      <p className="mt-2 font-mono text-[9px] uppercase tracking-widest text-muted">
-        Drag to rotate — each point is a sampled pixel plotted by RGB value
-      </p>
-      <p className="mt-1 font-mono text-[10px] text-muted">
-        {samples.length} color samples · weighted by frequency
+      <p className="mt-2 font-mono text-[10px] uppercase tracking-wide text-muted">
+        Color space — {samples.length} pixels plotted in RGB space — drag to rotate
       </p>
     </div>
   );
@@ -115,7 +143,7 @@ function CubeFrame() {
   );
   return (
     <lineSegments geometry={geometry}>
-      <lineBasicMaterial color="#222222" />
+      <lineBasicMaterial color="#000000" transparent opacity={0.15} />
     </lineSegments>
   );
 }
@@ -135,7 +163,14 @@ function GridFloor() {
   return (
     <>
       {segments.map((points, i) => (
-        <Line key={i} points={points} color="#1a1a1a" lineWidth={0.5} />
+        <Line
+          key={i}
+          points={points}
+          color="#000000"
+          transparent
+          opacity={0.06}
+          lineWidth={0.5}
+        />
       ))}
     </>
   );
@@ -143,7 +178,7 @@ function GridFloor() {
 
 function AxisTicks() {
   const origin: [number, number, number] = [-HALF, -HALF, -HALF];
-  const labelOffset = 0.3;
+  const labelOffset = 0.4;
   return (
     <>
       <Line points={[origin, [HALF, -HALF, -HALF]]} color={AXIS_COLORS.r} lineWidth={1.5} />

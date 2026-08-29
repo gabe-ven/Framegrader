@@ -173,6 +173,8 @@ export function UploadPanel() {
         <EditPage
           key="editing"
           file={file}
+          ai={ai}
+          histogram={result?.vision?.histogram ?? null}
           colorGrade={colorGrade}
           colorGradeStatus={colorGradeStatus}
           colorGradeError={colorGradeError}
