@@ -13,8 +13,6 @@ interface CritiqueSectionProps {
   delay?: number;
 }
 
-const LABEL_CLASS = "mb-6 font-mono text-[10px] uppercase tracking-widest text-subtle";
-
 export function CritiqueSection({
   ai,
   exif = null,
@@ -55,6 +53,10 @@ export function CritiqueSection({
   );
 }
 
+/** The newspaper front page / zine layout: a 12-column editorial grid inside
+ * one heavy neobrutalist frame — a full-bleed masthead on top, prose in two
+ * columns on the left 8, and the recreation steps as a stark sidebar on the
+ * right 4. Replaces the old stacked-block "ledger" reading. */
 function CritiqueContent({ ai, exif }: { ai: AIAnalysis; exif: ExifInfo | null }) {
   const settings = ai.camera_settings;
   const settingsValues = settings
@@ -65,7 +67,6 @@ function CritiqueContent({ ai, exif }: { ai: AIAnalysis; exif: ExifInfo | null }
         settings.focal_length,
       ].filter((v): v is string => Boolean(v))
     : [];
-  const hasAnySetting = settingsValues.length > 0;
 
   const cameraModel =
     exif?.make || exif?.model
@@ -94,97 +95,126 @@ function CritiqueContent({ ai, exif }: { ai: AIAnalysis; exif: ExifInfo | null }
   // half is the fix.
   const strengths = crit?.strengths ?? [];
   const improvements = crit?.improvements ?? [];
+  const hasCritique = Boolean(strengths.length || improvements.length);
 
-  const hasScene = Boolean(ai.scene?.summary || tagLine);
-  const hasCamera = Boolean(hasAnySetting || metaLine || subjectLine || settings?.reasoning);
-  const hasCritique = Boolean(strengths.length || improvements.length || crit?.overall);
   const steps = ai.recreation_guide.slice(0, 4);
 
+  // The masthead's headline is always the camera settings — the one line a
+  // newspaper reader scans first. On the rare response with no settings at
+  // all (AI declines to estimate), the scene summary steps up so the
+  // masthead is never left blank.
+  const headline = settingsValues.length > 0 ? settingsValues.join(" — ") : ai.scene?.summary;
+
   return (
-    <div>
-      {/* Block 1 — Scene */}
-      {hasScene && (
-        <div className="border-b-4 border-black pb-8">
-          {ai.scene?.summary && (
-            <p className="font-sans text-xl font-bold text-text">{ai.scene.summary}</p>
-          )}
-          {tagLine && (
-            <p className="mt-3 font-mono text-[10px] text-subtle">{tagLine}</p>
-          )}
-        </div>
-      )}
-
-      {/* Block 2 — Camera */}
-      {hasCamera && (
-        <div className="border-b-4 border-black pb-8 pt-8">
-          {hasAnySetting && (
-            <p className="font-mono text-2xl font-bold text-text">{settingsValues.join(" — ")}</p>
-          )}
-          {metaLine && (
-            <p className="mt-1 font-mono text-xs text-subtle">{metaLine}</p>
-          )}
-          {subjectLine && (
-            <p className="mt-4 font-sans text-sm text-muted">{subjectLine}</p>
-          )}
-          {settings?.reasoning && (
-            <p className="mt-4 font-sans text-sm text-muted">
-              {settings.reasoning}
-            </p>
-          )}
-        </div>
-      )}
-
-      {/* Block 3 — Critique, split into what works / what to improve */}
-      {hasCritique && (
-        <div className="border-b-4 border-black pb-8 pt-8">
-          <div className="grid gap-x-12 gap-y-8 sm:grid-cols-2">
-            {strengths.length > 0 && (
-              <CritiqueList label="What works" items={strengths} />
+    <div className="grid grid-cols-1 overflow-hidden border-4 border-black bg-white shadow-[12px_12px_0_0_#000] md:grid-cols-12">
+      {/* --- Masthead: spans all 12 columns --- */}
+      <div className="border-b-4 border-black bg-yellow-400 p-6 md:col-span-12">
+        {headline && (
+          <p className="font-sans text-4xl font-black uppercase leading-[0.95] tracking-tighter text-black md:text-6xl">
+            {headline}
+          </p>
+        )}
+        {(metaLine || ai.scene?.summary) && (
+          <div className="mt-4 flex flex-wrap items-baseline gap-3">
+            {metaLine && (
+              <span className="inline-block border-4 border-black bg-white px-3 py-1 font-mono text-xs font-black uppercase tracking-widest text-black">
+                {metaLine}
+              </span>
             )}
-            {improvements.length > 0 && (
-              <CritiqueList label="What to improve" items={improvements} />
+            {ai.scene?.summary && (
+              <p className="font-sans text-lg font-bold text-black">{ai.scene.summary}</p>
             )}
           </div>
-          {crit?.overall && (
-            <p className="mt-8 max-w-3xl font-sans text-sm leading-relaxed text-muted">
-              {crit.overall}
-            </p>
-          )}
-        </div>
-      )}
+        )}
+        {(subjectLine || tagLine) && (
+          <p className="mt-3 font-mono text-[10px] uppercase tracking-widest text-black/70">
+            {[subjectLine, tagLine].filter(Boolean).join("  ·  ")}
+          </p>
+        )}
+        {settings?.reasoning && (
+          <p className="mt-4 max-w-2xl font-sans text-sm font-semibold text-black/80">
+            {settings.reasoning}
+          </p>
+        )}
+      </div>
 
-      {/* Block 4 — Recreation guide */}
-      {steps.length > 0 && (
-        <div className="pt-8">
-          <p className={LABEL_CLASS}>To recreate</p>
-          <div>
+      {/* --- Editorial columns: 1 to 8 --- */}
+      <div className="p-6 md:col-span-8">
+        {hasCritique ? (
+          <>
+            <div className="grid grid-cols-1 gap-8 md:grid-cols-2">
+              {strengths.length > 0 && (
+                <CritiqueList label="What works" items={strengths} />
+              )}
+              {improvements.length > 0 && (
+                <CritiqueList
+                  label="What to improve"
+                  items={improvements}
+                  dividerClassName="border-t-4 border-black pt-8 md:border-l-4 md:border-t-0 md:pl-8 md:pt-0"
+                />
+              )}
+            </div>
+            {crit?.overall && (
+              <p className="mt-8 border-t-4 border-black pt-6 font-sans text-xl font-bold italic leading-snug text-black">
+                “{crit.overall}”
+              </p>
+            )}
+          </>
+        ) : (
+          <p className="text-sm text-muted">No composition critique for this photo.</p>
+        )}
+      </div>
+
+      {/* --- Sidebar / guide: 9 to 12 --- */}
+      <div className="border-t-4 border-black bg-red-500 p-6 text-white md:col-span-4 md:border-l-4 md:border-t-0">
+        <p className="mb-6 font-mono text-xs font-black uppercase tracking-[0.2em] text-white/80">
+          To recreate
+        </p>
+        {steps.length > 0 ? (
+          <ol>
             {steps.map((step, i) => (
-              <div key={i} className="flex gap-6 border-b border-border py-4">
-                <span className="w-8 shrink-0 font-mono text-xs text-subtle">
+              <li
+                key={i}
+                className="border-b-2 border-black/25 py-4 first:pt-0 last:border-b-0 last:pb-0"
+              >
+                <span className="block font-mono text-5xl font-black leading-none">
                   {String(i + 1).padStart(2, "0")}
                 </span>
-                <span className="font-sans text-sm leading-relaxed text-text">{step}</span>
-              </div>
+                <p className="mt-2 font-sans text-sm font-bold leading-snug">{step}</p>
+              </li>
             ))}
-          </div>
-        </div>
-      )}
+          </ol>
+        ) : (
+          <p className="font-sans text-sm font-bold text-white/80">
+            No recreation guide for this photo.
+          </p>
+        )}
+      </div>
     </div>
   );
 }
 
-/** One labelled column of critique points. Borrows the row rhythm from the
- * recreation guide below it so the two blocks read as the same document. */
-function CritiqueList({ label, items }: { label: string; items: string[] }) {
+/** One labelled column of critique points, dense and readable — this is the
+ * article body, not a caption. */
+function CritiqueList({
+  label,
+  items,
+  dividerClassName,
+}: {
+  label: string;
+  items: string[];
+  /** Extra classes for the dividing rule against the sibling column — thick
+   * top border when stacked on mobile, thick left border side-by-side. */
+  dividerClassName?: string;
+}) {
   return (
-    <div>
-      <p className={LABEL_CLASS}>{label}</p>
-      <ul>
+    <div className={dividerClassName}>
+      <p className="mb-4 font-mono text-xs font-black uppercase tracking-[0.2em] text-black">
+        {label}
+      </p>
+      <ul className="space-y-4">
         {items.map((item, i) => (
-          <li
-            key={i}
-            className="border-b border-border py-3 font-sans text-sm leading-relaxed text-text first:pt-0"
-          >
+          <li key={i} className="font-sans text-lg font-medium leading-relaxed text-black">
             {item}
           </li>
         ))}
@@ -210,43 +240,37 @@ function Banner({
   );
 }
 
+/** Mirrors the masthead / editorial-columns / sidebar shape while loading, so
+ * the layout doesn't jump when the real content resolves. */
 function CritiqueSkeleton() {
   return (
-    <div className="space-y-8">
-      <div className="space-y-3">
-        <div className="relative h-8 w-3/4 max-w-3xl overflow-hidden bg-border">
+    <div className="grid grid-cols-1 overflow-hidden border-4 border-black bg-white shadow-[12px_12px_0_0_#000] md:grid-cols-12">
+      <div className="border-b-4 border-black bg-yellow-400 p-6 md:col-span-12">
+        <div className="relative h-12 w-2/3 max-w-xl overflow-hidden bg-black/10 md:h-16">
           <ShimmerOverlay />
         </div>
-        <div className="relative h-8 w-1/2 max-w-3xl overflow-hidden bg-border">
+        <div className="relative mt-4 h-7 w-48 overflow-hidden bg-black/10">
           <ShimmerOverlay />
         </div>
-        <div className="flex gap-2 pt-1">
-          <div className="relative h-6 w-20 overflow-hidden bg-border">
+      </div>
+      <div className="grid grid-cols-1 gap-8 p-6 md:col-span-8 md:grid-cols-2">
+        {[0, 1].map((i) => (
+          <div key={i} className="space-y-3">
+            <div className="relative h-4 w-28 overflow-hidden bg-border">
+              <ShimmerOverlay />
+            </div>
+            <div className="relative h-24 overflow-hidden bg-border">
+              <ShimmerOverlay />
+            </div>
+          </div>
+        ))}
+      </div>
+      <div className="space-y-4 border-t-4 border-black bg-red-500/20 p-6 md:col-span-4 md:border-l-4 md:border-t-0">
+        {[0, 1, 2].map((i) => (
+          <div key={i} className="relative h-16 overflow-hidden bg-black/10">
             <ShimmerOverlay />
           </div>
-          <div className="relative h-6 w-16 overflow-hidden bg-border">
-            <ShimmerOverlay />
-          </div>
-        </div>
-      </div>
-      <div className="grid gap-8 sm:grid-cols-2">
-        <div className="relative h-24 overflow-hidden bg-border">
-          <ShimmerOverlay />
-        </div>
-        <div className="relative h-24 overflow-hidden bg-border">
-          <ShimmerOverlay />
-        </div>
-      </div>
-      <div className="relative h-16 overflow-hidden bg-border">
-        <ShimmerOverlay />
-      </div>
-      <div className="grid gap-8 sm:grid-cols-2">
-        <div className="relative h-28 overflow-hidden bg-border">
-          <ShimmerOverlay />
-        </div>
-        <div className="relative h-28 overflow-hidden bg-border">
-          <ShimmerOverlay />
-        </div>
+        ))}
       </div>
     </div>
   );
