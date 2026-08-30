@@ -1,16 +1,18 @@
 # Render Blueprint for the backend. The frontend deploys to Vercel — see
 # vercel.json and the Deployment section of README.md.
 #
-# The two path keys below are the whole reason the first deploy failed: Render
-# looks for ./Dockerfile at the repo root by default, and this one lives under
-# backend/. dockerContext must point at backend/ too, because the Dockerfile's
-# COPY instructions are relative to it.
+# NOTE: a Blueprint only configures services CREATED from a Blueprint. A service
+# created by hand in the dashboard ignores this file and keeps using its own
+# settings — which is why adding it did not fix anything on an existing service.
+# Either create the service via New > Blueprint, or set the same values by hand.
+#
+# No dockerfilePath/dockerContext overrides are needed any more: the Dockerfile
+# now sits at the repo root with the root as its build context, which is what
+# Render defaults to.
 services:
   - type: web
     name: framegrader-api
     runtime: docker
-    dockerfilePath: ./backend/Dockerfile
-    dockerContext: ./backend
     healthCheckPath: /health
     # Free fits — but only with the lite build below. Measured: ~88 MB idle,
     # ~292 MB peak across three concurrent 26MP analyses, against the 512 MB

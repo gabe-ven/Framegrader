@@ -1,8 +1,14 @@
 # Frame Grader backend.
 #
-# Build from the backend/ directory:
-#   docker build -t framegrader-api backend/
+# Build from the REPO ROOT:
+#   docker build -t framegrader-api .
 #   docker run -p 8000:8000 --env-file backend/.env framegrader-api
+#
+# Lives at the root, not under backend/, on purpose. Render, Railway and most
+# managed hosts default to looking for ./Dockerfile with the repo root as build
+# context. Keeping it here means a service created through a dashboard works
+# with no path overrides — the misconfiguration that produced two failed
+# deploys ("failed to read dockerfile: open Dockerfile: no such file").
 #
 # Two things this image deliberately does:
 #   1. Installs from requirements.lock, not requirements.txt, so the transitive
@@ -33,7 +39,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN python -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
-COPY requirements*.lock ./
+COPY backend/requirements*.lock ./
 
 # CPU-only torch first, and only when the chosen lock actually wants it. The
 # default PyPI wheels bundle CUDA and add ~2GB to an image that will never see a
@@ -87,7 +93,7 @@ WORKDIR /app
 # Trailing slash + glob: copies the checkpoint for the full build, and copies
 # nothing (without failing) for the lite build.
 COPY --from=builder /weights/ /app/
-COPY app ./app
+COPY backend/app ./app
 
 RUN mkdir -p "$YOLO_CONFIG_DIR" "$MPLCONFIGDIR" && chown -R appuser:appuser /app /home/appuser
 USER appuser

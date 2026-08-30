@@ -1,26 +1,40 @@
-# Build context is backend/. Keep it small and keep secrets out.
+# Build context is the repo root (Render's default), so this has to exclude the
+# frontend, the eval photos and both virtualenvs — otherwise the daemon uploads
+# hundreds of MB it will never use.
 
 # Secrets — .env holds ANTHROPIC_API_KEY. Pass it at runtime
 # (--env-file / platform secrets), never bake it into a layer.
 .env
-.env.*
-!.env.example
+**/.env
+!**/.env.example
 
-# Local virtualenv: hundreds of MB, and macOS wheels are useless in the image.
+# The frontend deploys to Vercel; none of it belongs in the API image.
+frontend/
+
+# Eval photos are large and gitignored, but they'd still be sent as context.
+eval/
+
+# Virtualenvs: hundreds of MB, and host-built wheels are useless in the image.
 .venv/
+**/.venv/
 venv/
 
-# Weights are downloaded during the build; shipping the local copies would add
-# ~165MB to the context (including the unused yolov8x checkpoint).
+# Weights are downloaded during the build; the local copies would add ~190MB
+# to the context (including the unused yolov8x checkpoint).
 *.pt
+**/*.pt
 
-# Tests and caches
-tests/
+# Tests, caches, tooling
+backend/tests/
+**/__pycache__/
+**/*.py[cod]
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
-__pycache__/
-*.py[cod]
+.github/
+.git/
+docs/
+scripts/
 
 # OS / editor
 .DS_Store

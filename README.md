@@ -81,18 +81,21 @@ startup model warm-up all assume a process that stays alive between requests.
 Render, Railway, Fly.io and Cloud Run all build the `Dockerfile` directly:
 
 ```bash
-docker build -t framegrader-api backend/
+docker build -t framegrader-api .
 docker run -p 8000:8000 --env-file backend/.env framegrader-api
 ```
 
 `render.yaml` is a ready Blueprint. Two settings in it are not optional — they are
 the two ways this deploy fails:
 
-- **`dockerfilePath: ./backend/Dockerfile` + `dockerContext: ./backend`.** Render
-  looks for `./Dockerfile` at the repo root by default and fails with
-  "failed to read dockerfile". The context must be `backend/` too, since the
-  Dockerfile's `COPY` paths are relative to it. Configuring an existing service by
-  hand? Settings → Docker Build Context Directory and Dockerfile Path.
+- **Leave the Docker path settings at their defaults.** The `Dockerfile` lives at
+  the repo root with the root as its build context, which is exactly what Render
+  looks for. Pointing them at `backend/` instead produces
+  "failed to read dockerfile: open Dockerfile: no such file or directory".
+- **A Blueprint only configures services created *from* a Blueprint.** Adding
+  `render.yaml` does nothing to a service you created by hand in the dashboard —
+  it keeps using its own settings. Create the service via **New → Blueprint**, or
+  set the equivalent values in the dashboard yourself.
 - **Instance size.** The full build needs **≥ 2 GB** — measured ~1.4 GB resident
   once torch and the YOLO weights load. Render's free and starter plans are both
   512 MB, so it OOMs at startup. The **lite build fits free**: see below.
@@ -102,7 +105,7 @@ The container binds `$PORT` when the host provides one, falling back to 8000.
 #### Lite build — fits a free 512 MB instance
 
 ```bash
-docker build -t framegrader-api --build-arg REQUIREMENTS=requirements-lite.lock backend/
+docker build -t framegrader-api --build-arg REQUIREMENTS=requirements-lite.lock .
 ```
 
 Drops torch, torchvision, ultralytics and CLIP. Measured against the full build:
@@ -112,6 +115,10 @@ Drops torch, torchvision, ultralytics and CLIP. Measured against the full build:
 | Dependencies on disk | 1.1 GB | 348 MB |
 | Idle RSS | ~1441 MB | ~88 MB |
 | Peak RSS (3x 26 MP analyses) | ~1322 MB | ~292 MB |
+
+Measured inside the actual container, the lite build is smaller still: **73 MiB
+idle, 179 MiB peak** for one 26 MP analysis, against Render's 512 MiB cap.
+Image size 815 MB.
 
 Nothing is stubbed. The subject locator is a three-tier chain and only tier 1
 needs torch: the import fails, the detector tier is skipped with a logged

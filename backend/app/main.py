@@ -46,7 +46,17 @@ def _warm_models() -> None:
 
         logger.info("Warming YOLO-World model in background…")
         YOLOWorldSubjectLocator.warm_up()
-        logger.info("YOLO-World model ready.")
+        # Report what actually happened. Logging "ready" unconditionally was
+        # actively misleading on the lite build, which has no ultralytics at
+        # all: the log said the detector was ready two lines after saying the
+        # import failed.
+        if YOLOWorldSubjectLocator._get_model() is not None:
+            logger.info("YOLO-World model ready.")
+        else:
+            logger.info(
+                "Detector tier unavailable; subject localization will use the "
+                "VLM tier, falling back to the saliency centroid."
+            )
     except Exception:
         logger.warning("Model warm-up failed; will retry on first request.", exc_info=True)
 
