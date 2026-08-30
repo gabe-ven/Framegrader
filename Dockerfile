@@ -68,11 +68,14 @@ RUN if python -c "import ultralytics" 2>/dev/null; then \
 # ---------------------------------------------------------------------------
 FROM python:3.13-slim AS runtime
 
-# libgomp1: torch's OpenMP runtime. libglib2.0-0: still linked by the headless
-# OpenCV wheels. curl: for the HEALTHCHECK below.
+# libgomp1: torch's OpenMP runtime. libglib2.0-0 + libgl1: linked by the
+# non-headless opencv-python wheel (in requirements.lock alongside the headless
+# one); libgl1 provides libGL.so.1, without which `import cv2` fails at runtime.
+# curl: for the HEALTHCHECK below.
 RUN apt-get update && apt-get install -y --no-install-recommends \
         libgomp1 \
         libglib2.0-0 \
+        libgl1 \
         curl \
     && rm -rf /var/lib/apt/lists/*
 
