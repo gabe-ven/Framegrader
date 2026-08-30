@@ -34,6 +34,20 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* Scoped override, not a global theme change: applied to the analyzing and
+   results stages only (see AnalyzingView/ResultsView) so they pick up the
+   hero's cream background and hard black rules everywhere those stages read
+   --color-bg/--color-border/--color-tag-bg, without touching the edit page
+   or any other stage that still uses the original monochrome palette. */
+.theme-comic {
+  --color-bg: #fffbeb;
+  --color-bg-off: #fef3c7;
+  --color-border: #000000;
+  --color-border-strong: #000000;
+  --color-tag-bg: #facc15;
+  --color-tag-text: #000000;
+}
+
 hr {
   border: none;
   border-top: 1px solid var(--color-border);

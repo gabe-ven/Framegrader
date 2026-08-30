@@ -165,7 +165,7 @@ and both must be set or the browser blocks every request:
 
 | Where | Variable | Value |
 | ----- | -------- | ----- |
-| Vercel (frontend) | `VITE_API_BASE_URL` | the backend's public origin, e.g. `https://framegrader-api.onrender.com` |
+| Vercel (frontend) | `VITE_API_BASE_URL` | the backend's public origin, e.g. `https://framegrader.onrender.com` |
 | Backend host | `ALLOWED_ORIGINS` | the Vercel domain, e.g. `https://framegrader.vercel.app` |
 
 `VITE_API_BASE_URL` is inlined at **build** time, not read at runtime — changing it

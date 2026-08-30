@@ -38,41 +38,47 @@ export function ResultsView({
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0 }}
       transition={{ duration: 0.4, ease: "easeOut" }}
-      className="space-y-16 py-16"
+      className="theme-comic relative left-1/2 w-screen -translate-x-1/2 bg-bg py-16"
     >
-      <PhotographSection
-        file={file}
-        previewUrl={previewUrl}
-        exif={result?.exif ?? null}
-        composition={result?.composition ?? null}
-        recipe={ai?.fujifilm_recipe?.applicable === true ? ai.fujifilm_recipe : null}
-        canEdit={status === "success"}
-        onChooseAnother={onChooseAnother}
-        onEditPhoto={onEditPhoto}
-      />
-
-      {/* Each section owns its own loading state: measurements track the CV
-          request, the critique tracks the (much slower) AI request. They fill
-          in independently rather than the whole report waiting on the slowest. */}
-      <div className="space-y-16">
-        {status === "success" && (
-          <CritiqueSection
-            ai={ai}
-            exif={result?.exif ?? null}
-            loading={aiStatus === "loading"}
-            error={aiStatus === "error" ? aiError : null}
-            delay={0}
-          />
-        )}
-        <MeasurementsSection
-          vision={result?.vision ?? null}
+      {/* Re-establish the max-5xl reading width App.tsx would otherwise
+          provide — the full-bleed wrapper above is only there to paint the
+          background edge-to-edge, not to let the report's own content
+          stretch past its normal width. */}
+      <div className="mx-auto max-w-5xl space-y-16 px-6">
+        <PhotographSection
+          file={file}
+          previewUrl={previewUrl}
+          exif={result?.exif ?? null}
           composition={result?.composition ?? null}
-          semantic={ai?.semantic_composition ?? null}
-          imageUrl={previewUrl}
-          loading={status === "loading"}
-          error={status === "error" ? error : null}
-          delay={0.2}
+          recipe={ai?.fujifilm_recipe?.applicable === true ? ai.fujifilm_recipe : null}
+          canEdit={status === "success"}
+          onChooseAnother={onChooseAnother}
+          onEditPhoto={onEditPhoto}
         />
+
+        {/* Each section owns its own loading state: measurements track the CV
+            request, the critique tracks the (much slower) AI request. They fill
+            in independently rather than the whole report waiting on the slowest. */}
+        <div className="space-y-16">
+          {status === "success" && (
+            <CritiqueSection
+              ai={ai}
+              exif={result?.exif ?? null}
+              loading={aiStatus === "loading"}
+              error={aiStatus === "error" ? aiError : null}
+              delay={0}
+            />
+          )}
+          <MeasurementsSection
+            vision={result?.vision ?? null}
+            composition={result?.composition ?? null}
+            semantic={ai?.semantic_composition ?? null}
+            imageUrl={previewUrl}
+            loading={status === "loading"}
+            error={status === "error" ? error : null}
+            delay={0.2}
+          />
+        </div>
       </div>
     </motion.div>
   );

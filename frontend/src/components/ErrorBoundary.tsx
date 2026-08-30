@@ -81,7 +81,7 @@ export function RootErrorFallback() {
       <div className="max-w-md text-center">
         <h1 className="font-display text-3xl text-text">Something went wrong.</h1>
         <p className="mt-3 font-sans text-sm text-muted">
-          Frame Grader hit an unexpected error. Reloading starts a fresh analysis.
+          Framegrader hit an unexpected error. Reloading starts a fresh analysis.
         </p>
         <button
           type="button"

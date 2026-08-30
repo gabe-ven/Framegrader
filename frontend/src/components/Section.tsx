@@ -34,8 +34,8 @@ export function Section({ number, title, description, action, children }: Sectio
   return (
     <section>
       <div ref={ref}>
-        <motion.hr
-          className="border-border"
+        <motion.div
+          className="h-1 bg-black"
           initial={{ scaleX: 0 }}
           animate={inView ? { scaleX: 1 } : { scaleX: 0 }}
           transition={SECTION_LINE_SPRING}
@@ -43,21 +43,20 @@ export function Section({ number, title, description, action, children }: Sectio
         />
         <div className="mb-8 mt-6 flex items-center justify-between gap-4">
           <motion.div
-            className="flex items-center gap-3"
             initial={{ opacity: 0, x: -8 }}
             animate={inView ? { opacity: 1, x: 0 } : { opacity: 0, x: -8 }}
             transition={{ ...SECTION_LABEL_SPRING, delay: 0.15 }}
           >
-            <span className="font-mono text-xs text-subtle">{number}</span>
-            <span className="font-mono text-xs text-subtle">—</span>
-            <span className="font-mono text-xs uppercase tracking-widest text-muted">
-              {title}
+            <span className="inline-block -rotate-1 border-4 border-black bg-yellow-400 px-3 py-1 font-mono text-xs font-black uppercase tracking-widest text-black shadow-[4px_4px_0_0_#000]">
+              {number} — {title}
             </span>
           </motion.div>
           {action}
         </div>
         {description && (
-          <p className="-mt-6 max-w-2xl text-sm leading-relaxed text-muted">{description}</p>
+          <p className="-mt-6 max-w-2xl text-sm font-bold leading-relaxed text-black">
+            {description}
+          </p>
         )}
       </div>
       {children}

@@ -29,7 +29,7 @@ export function CritiqueSection({
         title="AI CRITIQUE"
         action={
           loading ? (
-            <span className="bg-tag-bg px-3 py-1 font-mono text-xs uppercase tracking-widest text-muted">
+            <span className="border-4 border-black bg-tag-bg px-3 py-1 font-mono text-xs font-black uppercase tracking-widest text-tag-text shadow-[4px_4px_0_0_#000]">
               Thinking…
             </span>
           ) : undefined
@@ -104,9 +104,9 @@ function CritiqueContent({ ai, exif }: { ai: AIAnalysis; exif: ExifInfo | null }
     <div>
       {/* Block 1 — Scene */}
       {hasScene && (
-        <div className="border-b border-border pb-8">
+        <div className="border-b-4 border-black pb-8">
           {ai.scene?.summary && (
-            <p className="font-display text-xl text-text">{ai.scene.summary}</p>
+            <p className="font-sans text-xl font-bold text-text">{ai.scene.summary}</p>
           )}
           {tagLine && (
             <p className="mt-3 font-mono text-[10px] text-subtle">{tagLine}</p>
@@ -116,9 +116,9 @@ function CritiqueContent({ ai, exif }: { ai: AIAnalysis; exif: ExifInfo | null }
 
       {/* Block 2 — Camera */}
       {hasCamera && (
-        <div className="border-b border-border pb-8 pt-8">
+        <div className="border-b-4 border-black pb-8 pt-8">
           {hasAnySetting && (
-            <p className="font-mono text-2xl text-text">{settingsValues.join(" — ")}</p>
+            <p className="font-mono text-2xl font-bold text-text">{settingsValues.join(" — ")}</p>
           )}
           {metaLine && (
             <p className="mt-1 font-mono text-xs text-subtle">{metaLine}</p>
@@ -136,7 +136,7 @@ function CritiqueContent({ ai, exif }: { ai: AIAnalysis; exif: ExifInfo | null }
 
       {/* Block 3 — Critique, split into what works / what to improve */}
       {hasCritique && (
-        <div className="border-b border-border pb-8 pt-8">
+        <div className="border-b-4 border-black pb-8 pt-8">
           <div className="grid gap-x-12 gap-y-8 sm:grid-cols-2">
             {strengths.length > 0 && (
               <CritiqueList label="What works" items={strengths} />
@@ -200,9 +200,11 @@ function Banner({
   tone: "error" | "muted";
   children: React.ReactNode;
 }) {
-  const styles = tone === "error" ? "border-text text-text" : "border-border text-muted";
+  const styles = tone === "error" ? "bg-red-100 text-black" : "bg-white text-muted";
   return (
-    <div className={`border bg-bg-off px-4 py-3 font-mono text-sm ${styles}`}>
+    <div
+      className={`border-4 border-black px-4 py-3 font-mono text-sm font-bold shadow-[4px_4px_0_0_#000] ${styles}`}
+    >
       {children}
     </div>
   );

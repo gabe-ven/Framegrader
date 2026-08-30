@@ -107,42 +107,56 @@ export function PhotographSection({
 
   return (
     <div className="flex flex-col gap-8">
-      <hr className="relative left-1/2 w-screen -translate-x-1/2" />
+      <div className="relative left-1/2 h-1 w-screen -translate-x-1/2 bg-black" />
 
-      <div className="grid grid-cols-5 items-stretch gap-8">
+      <div className="grid grid-cols-5 items-start gap-8">
         {/* Photo — left, dominant. Shown uncropped (object-contain) and
-            vertically centered, so the leftover space (the info column runs
-            taller once the Fujifilm recipe is present) sits evenly above and
-            below the photo rather than all beneath it. */}
-        <div className="col-span-3 flex flex-col justify-center">
-          <div className="relative w-full overflow-hidden bg-bg">
-            {previewUrl ? (
-              <motion.img
-                layoutId="photo-preview"
-                initial={{ scale: 0.98, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                transition={{ layout: CARD_SPRING, default: PHOTO_ENTRANCE_SPRING }}
-                src={previewUrl}
-                alt={file.name}
-                draggable={false}
-                onLoad={(e) =>
-                  handleLoad(e.currentTarget.naturalWidth, e.currentTarget.naturalHeight)
-                }
-                className="block w-full select-none object-contain"
-              />
-            ) : (
-              <PhotoSkeleton className="aspect-[3/2] w-full" />
-            )}
+            top-aligned with the info column, so its top edge lines up with
+            the camera-name heading instead of floating in whatever leftover
+            space a vertical-center trick leaves above it.
+            Height is capped (object-contain lets it shrink to fit) so a
+            portrait or very-high-res upload can't blow the photo — and with
+            it, the whole section — past several screens of scrolling. The
+            overlay SVG and edge canvas both fit the same box the same way
+            (object-contain / preserveAspectRatio="meet"), so they stay
+            pixel-aligned with the photo at any capped size. */}
+        <div className="col-span-3">
+          {/* The border/shadow live on this outer wrapper, not the image
+              itself: the composition overlay is pixel-aligned to the inner
+              div's own box (see its comment above), so anything that would
+              change the image's rendered content box — like a border
+              directly on the <img> — would throw that alignment off by the
+              border's width. Wrapping it keeps the inner box untouched. */}
+          <div className="border-4 border-black bg-white p-2 shadow-[10px_10px_0_0_#000]">
+            <div className="relative w-full overflow-hidden bg-bg">
+              {previewUrl ? (
+                <motion.img
+                  layoutId="photo-preview"
+                  initial={{ scale: 0.98, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  transition={{ layout: CARD_SPRING, default: PHOTO_ENTRANCE_SPRING }}
+                  src={previewUrl}
+                  alt={file.name}
+                  draggable={false}
+                  onLoad={(e) =>
+                    handleLoad(e.currentTarget.naturalWidth, e.currentTarget.naturalHeight)
+                  }
+                  className="block max-h-[min(65vh,680px)] w-full select-none object-contain"
+                />
+              ) : (
+                <PhotoSkeleton className="aspect-[3/2] w-full" />
+              )}
 
-            {composition && previewUrl && (
-              <CompositionOverlayLayers
-                imageUrl={previewUrl}
-                composition={composition}
-                toggles={toggles}
-                dims={dims}
-                staggerReveal={!introPlayed}
-              />
-            )}
+              {composition && previewUrl && (
+                <CompositionOverlayLayers
+                  imageUrl={previewUrl}
+                  composition={composition}
+                  toggles={toggles}
+                  dims={dims}
+                  staggerReveal={!introPlayed}
+                />
+              )}
+            </div>
           </div>
         </div>
 
@@ -204,13 +218,10 @@ export function PhotographSection({
             </>
           )}
 
-          {/* mt-auto pins the buttons to the bottom of the info column so they
-              sit level with the (taller) photo's bottom edge; pt-6 keeps a
-              minimum gap when the column content nearly fills the height. */}
-          <div className="mt-auto pt-6">
+          <div className="mt-8">
             <button
               onClick={onChooseAnother}
-              className="block w-full border border-border px-4 py-3 text-center font-mono text-xs uppercase tracking-widest text-text transition-colors duration-150 hover:bg-bg-off"
+              className="block w-full border-4 border-black bg-white px-4 py-3 text-center font-sans text-sm font-black uppercase tracking-tight text-black shadow-[6px_6px_0_0_#000] transition-transform hover:translate-x-1 hover:translate-y-1 hover:shadow-[3px_3px_0_0_#000] active:translate-x-[6px] active:translate-y-[6px] active:shadow-none"
             >
               Choose another
             </button>
@@ -219,7 +230,7 @@ export function PhotographSection({
         </div>
       </div>
 
-      <hr className="relative left-1/2 w-screen -translate-x-1/2" />
+      <div className="relative left-1/2 h-1 w-screen -translate-x-1/2 bg-black" />
     </div>
   );
 }
@@ -232,7 +243,7 @@ function EditPhotoButton({ onClick }: { onClick: () => void }) {
       onClick={onClick}
       onHoverStart={() => animate(arrowX, 4, ARROW_SPRING)}
       onHoverEnd={() => animate(arrowX, 0, ARROW_SPRING)}
-      className="mt-2 block w-full bg-bg-dark px-4 py-3 text-center font-mono text-xs uppercase tracking-widest text-white transition-colors duration-150 hover:bg-[#333333]"
+      className="mt-3 block w-full border-4 border-black bg-red-500 px-4 py-3 text-center font-sans text-sm font-black uppercase tracking-tight text-white shadow-[6px_6px_0_0_#000] transition-transform hover:translate-x-1 hover:translate-y-1 hover:shadow-[3px_3px_0_0_#000] active:translate-x-[6px] active:translate-y-[6px] active:shadow-none"
     >
       Edit photo{" "}
       <motion.span className="inline-block" style={{ x: arrowX }}>
