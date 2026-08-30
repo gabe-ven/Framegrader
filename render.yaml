@@ -1,0 +1,57 @@
+# Render Blueprint for the backend. The frontend deploys to Vercel — see
+# vercel.json and the Deployment section of README.md.
+#
+# The two path keys below are the whole reason the first deploy failed: Render
+# looks for ./Dockerfile at the repo root by default, and this one lives under
+# backend/. dockerContext must point at backend/ too, because the Dockerfile's
+# COPY instructions are relative to it.
+services:
+  - type: web
+    name: framegrader-api
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    healthCheckPath: /health
+    # Free fits — but only with the lite build below. Measured: ~88 MB idle,
+    # ~292 MB peak across three concurrent 26MP analyses, against the 512 MB
+    # cap. The full build (with torch) needs ~1.4 GB and would OOM at startup;
+    # to deploy that instead, drop the dockerBuildArgs below and move to a
+    # 2 GB plan.
+    plan: free
+    dockerBuildArgs:
+      # Drops torch/ultralytics: subject localization escalates to the Claude
+      # VLM tier instead of running YOLO locally. Requires ANTHROPIC_API_KEY.
+      # See backend/requirements-lite.lock for the full trade-off.
+      REQUIREMENTS: requirements-lite.lock
+    envVars:
+      # Secrets and per-environment values: set these in the Render dashboard.
+      # sync: false means "prompt me, don't store it in the repo".
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      # Must list the Vercel origin exactly, e.g. https://framegrader.vercel.app
+      - key: ALLOWED_ORIGINS
+        sync: false
+
+      # Render terminates TLS at its own proxy and forwards to the container, so
+      # X-Forwarded-For is the only way to see the real client address. Without
+      # this uvicorn trusts 127.0.0.1 only, every request appears to come from
+      # the proxy, and the per-IP rate limiter throttles all users as one.
+      # `*` is safe here specifically because the container is not reachable
+      # except through that proxy.
+      - key: FORWARDED_ALLOW_IPS
+        value: "*"
+
+      # One analysis at a time. The default derives from cpu_count, which on a
+      # small shared instance would allow more concurrent 26MP decodes than the
+      # memory allows.
+      - key: ANALYSIS_CONCURRENCY
+        value: "1"
+
+      - key: LOG_LEVEL
+        value: "INFO"
+      - key: MAX_UPLOAD_MB
+        value: "25"
+      - key: AI_RATE_LIMIT
+        value: "10/hour"
+      - key: ANALYZE_RATE_LIMIT
+        value: "60/hour"

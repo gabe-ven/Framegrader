@@ -16,6 +16,12 @@
 # ---------------------------------------------------------------------------
 FROM python:3.13-slim AS builder
 
+# Which lock to install. Default is the full app. Pass
+#   --build-arg REQUIREMENTS=requirements-lite.lock
+# to drop torch/ultralytics and fit a 512MB free instance — see that file's
+# header for exactly what the lite build gives up.
+ARG REQUIREMENTS=requirements.lock
+
 ENV PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1
 
@@ -27,19 +33,29 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN python -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
-# CPU-only torch first. The default PyPI wheels bundle CUDA and add ~2GB to an
-# image that will never see a GPU. Installing the matching versions from the
-# CPU index up front means the lock install below finds them already satisfied.
-RUN pip install --index-url https://download.pytorch.org/whl/cpu \
-        torch==2.6.0 torchvision==0.21.0
+COPY requirements*.lock ./
 
-COPY requirements.lock .
-RUN pip install -r requirements.lock
+# CPU-only torch first, and only when the chosen lock actually wants it. The
+# default PyPI wheels bundle CUDA and add ~2GB to an image that will never see a
+# GPU; installing the matching versions from the CPU index up front means the
+# lock install below finds them already satisfied.
+RUN if grep -q '^torch==' "${REQUIREMENTS}"; then \
+        pip install --index-url https://download.pytorch.org/whl/cpu \
+            torch==2.6.0 torchvision==0.21.0; \
+    fi
 
-# Pre-download the detector weights. Runs in the directory the app will use as
-# its working dir, because the code asks for the checkpoint by bare filename.
+RUN pip install -r "${REQUIREMENTS}"
+
+# Pre-download the detector weights, so a cold container serves its first
+# analysis at full speed instead of fetching 25MB. Skipped for the lite build,
+# which has no detector tier. Runs in the directory the app will use as its
+# working dir, because the code asks for the checkpoint by bare filename.
 WORKDIR /weights
-RUN python -c "from ultralytics import YOLO; YOLO('yolov8s-worldv2.pt')"
+RUN if python -c "import ultralytics" 2>/dev/null; then \
+        python -c "from ultralytics import YOLO; YOLO('yolov8s-worldv2.pt')"; \
+    else \
+        echo "lite build: no detector tier, skipping weights"; \
+    fi
 
 # ---------------------------------------------------------------------------
 # Runtime — no compilers, no git, no pip cache.
@@ -68,7 +84,9 @@ ENV PATH="/opt/venv/bin:$PATH" \
     MPLCONFIGDIR=/home/appuser/.cache/matplotlib
 
 WORKDIR /app
-COPY --from=builder /weights/yolov8s-worldv2.pt /app/
+# Trailing slash + glob: copies the checkpoint for the full build, and copies
+# nothing (without failing) for the lite build.
+COPY --from=builder /weights/ /app/
 COPY app ./app
 
 RUN mkdir -p "$YOLO_CONFIG_DIR" "$MPLCONFIGDIR" && chown -R appuser:appuser /app /home/appuser
@@ -79,7 +97,7 @@ EXPOSE 8000
 # start-period covers model warm-up; the app answers /health immediately, but
 # giving it room avoids a restart loop on a slow first boot.
 HEALTHCHECK --interval=30s --timeout=3s --start-period=60s --retries=3 \
-    CMD curl -fsS http://localhost:8000/health || exit 1
+    CMD curl -fsS "http://localhost:${PORT:-8000}/health" || exit 1
 
 # --proxy-headers makes uvicorn resolve X-Forwarded-For, which the per-IP rate
 # limiter depends on: without it every request behind a proxy shares the
@@ -90,4 +108,8 @@ HEALTHCHECK --interval=30s --timeout=3s --start-period=60s --retries=3 \
 # Single worker on purpose: the rate limiter's storage is in-process (N workers
 # = N x the limit) and each worker loads its own copy of the model. Scale with
 # replicas behind a shared Redis for slowapi, not with --workers.
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers"]
+# Shell form on purpose, so ${PORT} expands at runtime: managed hosts (Render,
+# Cloud Run, Railway) assign the port and expect the process to bind it rather
+# than a fixed one. `exec` keeps uvicorn as PID 1 so it receives SIGTERM and
+# shuts down cleanly instead of being killed after the grace period.
+CMD exec uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000} --proxy-headers

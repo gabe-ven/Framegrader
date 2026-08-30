@@ -28,10 +28,10 @@ export function LeadingLinesOverlay({
       {lines.map((line, i) => (
         <motion.line
           key={`ll-${i}`}
-          x1={line.x1}
-          y1={line.y1}
-          x2={line.x2}
-          y2={line.y2}
+          x1={line.x1 * width}
+          y1={line.y1 * height}
+          x2={line.x2 * width}
+          y2={line.y2 * height}
           stroke="#ffe234"
           strokeWidth={stroke}
           strokeLinecap="round"

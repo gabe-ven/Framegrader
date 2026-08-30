@@ -11,10 +11,11 @@ import {
 import type { CompositionInfo } from "@/types/analysis";
 
 /**
- * Endpoints of detected leading lines (Recharts ScatterChart). Coordinates are
- * the real pixel endpoints from leading_lines.lines, normalized to 0–1 against
- * the bounding extents of the endpoints. The Y axis is reversed so the plot
- * reads like image space (origin top-left). Render only when lines exist.
+ * Endpoints of detected leading lines (Recharts ScatterChart). leading_lines
+ * coordinates arrive normalized to 0–1 against the frame, so both axes are
+ * fixed to that domain and a point's position means where in the photo the
+ * line endpoint actually is. The Y axis is reversed so the plot reads like
+ * image space (origin top-left). Render only when lines exist.
  */
 export function LeadingLinesScatter({
   composition,
@@ -23,17 +24,14 @@ export function LeadingLinesScatter({
 }) {
   const lines = composition.leading_lines.lines;
 
-  const points = lines.flatMap((l) => [
-    { x: l.x1, y: l.y1 },
-    { x: l.x2, y: l.y2 },
+  // Endpoints already arrive normalized to 0-1 against the frame, so they plot
+  // directly. They used to be rescaled here against the endpoints' own extents,
+  // which stretched every result to fill the axes and hid where in the frame
+  // the lines actually sat.
+  const data = lines.flatMap((l) => [
+    { x: round3(l.x1), y: round3(l.y1) },
+    { x: round3(l.x2), y: round3(l.y2) },
   ]);
-
-  const maxX = Math.max(1, ...points.map((p) => p.x));
-  const maxY = Math.max(1, ...points.map((p) => p.y));
-  const data = points.map((p) => ({
-    x: round3(p.x / maxX),
-    y: round3(p.y / maxY),
-  }));
 
   return (
     <div className="h-full w-full">

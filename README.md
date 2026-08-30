@@ -66,10 +66,74 @@ pip freeze | grep -viE '^(pytest|pluggy|iniconfig)==' > requirements.lock
 
 ## Deployment
 
+The two halves deploy to different places, because they have different shapes:
+the frontend is static files, the backend is a long-lived process holding a
+~1.1 GB dependency tree and a loaded model in memory.
+
+**The backend cannot run on serverless functions.** torch alone is 342 MB against
+Vercel's 250 MB unzipped limit, and the full dependency set is ~9x over. Dropping
+torch would mean dropping the YOLO-World tier — the core of the composition
+analysis. Beyond size, the in-process rate limiter, the threadpool cap, and the
+startup model warm-up all assume a process that stays alive between requests.
+
+### Backend — any container host
+
+Render, Railway, Fly.io and Cloud Run all build the `Dockerfile` directly:
+
 ```bash
 docker build -t framegrader-api backend/
 docker run -p 8000:8000 --env-file backend/.env framegrader-api
 ```
+
+`render.yaml` is a ready Blueprint. Two settings in it are not optional — they are
+the two ways this deploy fails:
+
+- **`dockerfilePath: ./backend/Dockerfile` + `dockerContext: ./backend`.** Render
+  looks for `./Dockerfile` at the repo root by default and fails with
+  "failed to read dockerfile". The context must be `backend/` too, since the
+  Dockerfile's `COPY` paths are relative to it. Configuring an existing service by
+  hand? Settings → Docker Build Context Directory and Dockerfile Path.
+- **Instance size.** The full build needs **≥ 2 GB** — measured ~1.4 GB resident
+  once torch and the YOLO weights load. Render's free and starter plans are both
+  512 MB, so it OOMs at startup. The **lite build fits free**: see below.
+
+The container binds `$PORT` when the host provides one, falling back to 8000.
+
+#### Lite build — fits a free 512 MB instance
+
+```bash
+docker build -t framegrader-api --build-arg REQUIREMENTS=requirements-lite.lock backend/
+```
+
+Drops torch, torchvision, ultralytics and CLIP. Measured against the full build:
+
+| | Full | Lite |
+| --- | --- | --- |
+| Dependencies on disk | 1.1 GB | 348 MB |
+| Idle RSS | ~1441 MB | ~88 MB |
+| Peak RSS (3x 26 MP analyses) | ~1322 MB | ~292 MB |
+
+Nothing is stubbed. The subject locator is a three-tier chain and only tier 1
+needs torch: the import fails, the detector tier is skipped with a logged
+warning, and requests escalate to the Claude VLM tier — which in practice labels
+subjects *better* than YOLO did. What you give up:
+
+- **`ANTHROPIC_API_KEY` becomes required** for subject localization. Without it
+  the chain falls through to the saliency centroid, which has no box and no label.
+- **One extra Claude call per `/analyze`**, so it is slower and costs more per photo.
+- **No offline subject detection.**
+
+`render.yaml` is already configured this way (`plan: free` + the build arg). To
+deploy the full build instead, drop `dockerBuildArgs` and move to a 2 GB plan.
+
+Peak memory is bounded by two settings, both on by default: `DECODE_MAX_EDGE`
+asks libjpeg to decode JPEGs at a reduced scale (26 MP frame: 238 MB → 86 MB),
+and `MAX_ANALYSIS_MEGAPIXELS` backstops formats without scaled decoding. Neither
+costs accuracy — every metric already caps its own working resolution at 1920 px
+— with one exception worth knowing: **sharpness reads ~16% lower** under scaled
+decode, because libjpeg's DCT downscale is slightly softer than LANCZOS. It is
+documented as a relative metric and the qualitative band is unchanged, but values
+are not comparable across the two decode paths.
 
 The image installs from the lock, bakes the detector weights in at build time, uses
 CPU-only torch (the default CUDA wheels add ~2 GB for a GPU it will never see), and
@@ -86,9 +150,20 @@ Two things to get right in front of it:
   (N workers = N x the configured limit) and each worker loads its own copy of the
   model. Multiple replicas need a shared Redis backend for slowapi.
 
-The frontend builds to static files. Set `VITE_API_BASE_URL` at build time when the
-SPA is served from a different origin than the API, and add that origin to the
-backend's `ALLOWED_ORIGINS` (see `frontend/.env.example`).
+### Frontend — Vercel
+
+`vercel.json` at the repo root builds `frontend/` to static files. No Root Directory
+change is needed in the dashboard. Two environment variables tie the halves together,
+and both must be set or the browser blocks every request:
+
+| Where | Variable | Value |
+| ----- | -------- | ----- |
+| Vercel (frontend) | `VITE_API_BASE_URL` | the backend's public origin, e.g. `https://framegrader-api.onrender.com` |
+| Backend host | `ALLOWED_ORIGINS` | the Vercel domain, e.g. `https://framegrader.vercel.app` |
+
+`VITE_API_BASE_URL` is inlined at **build** time, not read at runtime — changing it
+requires a redeploy, not just a restart. Leave it unset only when the SPA and API
+share an origin behind one reverse proxy.
 
 ## Architecture
 

@@ -107,10 +107,14 @@ class RuleOfThirds(BaseModel):
 
 
 class LineSegment(BaseModel):
-    x1: int
-    y1: int
-    x2: int
-    y2: int
+    """A detected leading line. Endpoints are normalized to ``[0, 1]`` with a
+    top-left origin, like every other spatial field here, so a client can scale
+    them to whatever size it is actually displaying the photo at."""
+
+    x1: float
+    y1: float
+    x2: float
+    y2: float
     angle: float
 
 

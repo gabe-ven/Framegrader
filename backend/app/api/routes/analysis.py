@@ -78,17 +78,36 @@ def analyze(
         image_io.validate_upload(
             data, file.content_type, max_bytes=settings.max_upload_bytes
         )
-        image = image_io.open_image(data)
+        image = image_io.open_image(
+            data, decode_max_edge=settings.decode_max_edge
+        )
     except image_io.ImageValidationError as exc:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
         ) from exc
 
+    # Read from the header rather than the decoded image: the decode above may
+    # be scaled down, but this metadata describes the uploaded photograph.
+    original_size = image_io.read_display_dimensions(data)
     info = image_io.describe_image(
-        image, filename=file.filename or "upload", size_bytes=len(data)
+        image,
+        filename=file.filename or "upload",
+        size_bytes=len(data),
+        dimensions=original_size,
     )
     exif = exif_service.extract_exif(image)
-    vision = analysis_pipeline.run_vision_analysis(image)
+
+    # Cap working resolution before the pixel pipelines run. describe_image and
+    # the EXIF read above already captured everything that must reflect the
+    # original file, so the reported dimensions stay true while peak memory
+    # stops scaling with whatever the camera produced.
+    image = image_io.downscale_to_megapixels(
+        image, settings.max_analysis_megapixels
+    )
+
+    vision = analysis_pipeline.run_vision_analysis(
+        image, reported_dimensions=original_size
+    )
     composition = composition_pipeline.run_composition_analysis(image)
 
     return AnalysisResponse(
@@ -129,7 +148,9 @@ def ai_analysis(
         image_io.validate_upload(
             data, file.content_type, max_bytes=settings.max_upload_bytes
         )
-        image = image_io.open_image(data)
+        image = image_io.open_image(
+            data, decode_max_edge=settings.decode_max_edge
+        )
     except image_io.ImageValidationError as exc:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
@@ -174,7 +195,9 @@ def color_grade(
         image_io.validate_upload(
             data, file.content_type, max_bytes=settings.max_upload_bytes
         )
-        image = image_io.open_image(data)
+        image = image_io.open_image(
+            data, decode_max_edge=settings.decode_max_edge
+        )
     except image_io.ImageValidationError as exc:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)

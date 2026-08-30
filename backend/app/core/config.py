@@ -38,6 +38,18 @@ class Settings(BaseSettings):
     # discarded. DEBUG is very chatty — ultralytics and PIL are capped at
     # WARNING regardless so the app's own records stay readable.
     log_level: str = "INFO"
+    # Hard ceiling on the pixel count an analysis works with. The upload limit
+    # is in bytes, which says nothing about resolution — a 3MB JPEG can decode
+    # to 100MP — so this is what actually bounds peak memory. Every metric
+    # already caps its own working resolution at 1920px, so this costs no
+    # accuracy; reported dimensions stay the photo's true size. 0 disables it.
+    max_analysis_megapixels: float = 12.0
+    # Long-edge target for scaled JPEG decoding. Matches the 1920px every metric
+    # already caps itself at, so nothing downstream sees a smaller image than it
+    # would have used anyway — it just never materialises the full-resolution
+    # buffer. Cuts peak decode memory for a 26MP frame from ~238MB to ~86MB.
+    # 0 disables it and decodes at full resolution.
+    decode_max_edge: int = 1920
 
     @property
     def allowed_origins_list(self) -> list[str]:

@@ -53,16 +53,21 @@ def run_composition_analysis(image: Image.Image) -> dict:
         "negative_space": estimate_negative_space(gray, subject),
     }
 
-    # Leading-line coordinates are in analysis-resolution pixel space. Scale
-    # them back to original image dimensions so the frontend SVG (which uses
-    # naturalWidth/naturalHeight as its viewBox) renders them in the right place.
-    if analysis_w > 0 and analysis_h > 0 and (analysis_w != orig_w or analysis_h != orig_h):
-        sx = orig_w / analysis_w
-        sy = orig_h / analysis_h
+    # Leading-line coordinates come out in analysis-resolution pixel space.
+    # Normalize them to 0-1, matching every other spatial field in this API
+    # (centroid, bbox, horizon_y) and making them independent of whatever
+    # resolution the analysis or the client's preview happens to run at.
+    #
+    # They used to be scaled to the ORIGINAL image size instead, on the
+    # assumption the frontend SVG viewBox matched. It doesn't: the client
+    # renders a preview capped at 1600px, so a 4160px-wide photo produced
+    # coordinates roughly 2.6x outside the viewBox and the overlay drew off
+    # canvas. That went unnoticed only because the detector never fired.
+    if analysis_w > 0 and analysis_h > 0:
         for line in result["leading_lines"]["lines"]:
-            line["x1"] = int(round(line["x1"] * sx))
-            line["y1"] = int(round(line["y1"] * sy))
-            line["x2"] = int(round(line["x2"] * sx))
-            line["y2"] = int(round(line["y2"] * sy))
+            line["x1"] = round(line["x1"] / analysis_w, 4)
+            line["x2"] = round(line["x2"] / analysis_w, 4)
+            line["y1"] = round(line["y1"] / analysis_h, 4)
+            line["y2"] = round(line["y2"] / analysis_h, 4)
 
     return result

@@ -24,13 +24,23 @@ from app.services.vision.sharpness import compute_sharpness
 _VISION_MAX_EDGE = 1920
 
 
-def run_vision_analysis(image: Image.Image) -> dict:
+def run_vision_analysis(
+    image: Image.Image, reported_dimensions: tuple[int, int] | None = None
+) -> dict:
+    """Run the objective image-quality metrics.
+
+    ``reported_dimensions`` overrides what the ``dimensions``/``orientation``
+    fields describe. The caller may hand us an already-downscaled image to cap
+    memory (see image_io.downscale_to_megapixels), and those fields are supposed
+    to describe the photograph the user uploaded, not our working copy.
+    """
     # Preserve original dimensions for the reported metadata, then downsample.
-    orig_w, orig_h = image.size
-    if max(orig_w, orig_h) > _VISION_MAX_EDGE:
-        scale = _VISION_MAX_EDGE / max(orig_w, orig_h)
+    orig_w, orig_h = reported_dimensions or image.size
+    work_w, work_h = image.size
+    if max(work_w, work_h) > _VISION_MAX_EDGE:
+        scale = _VISION_MAX_EDGE / max(work_w, work_h)
         image = image.resize(
-            (max(1, int(orig_w * scale)), max(1, int(orig_h * scale))),
+            (max(1, int(work_w * scale)), max(1, int(work_h * scale))),
             Image.LANCZOS,
         )
 
