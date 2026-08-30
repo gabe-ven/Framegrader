@@ -42,6 +42,32 @@ class ExifInfo(BaseModel):
     gps: GpsCoordinates | None = None
 
 
+class FujifilmRecipeSettings(BaseModel):
+    """Values are exiftool's already human-readable strings (e.g. "+2 (hard)",
+    "Classic Chrome") straight from the camera's MakerNotes — not AI output."""
+
+    grain: str | None = None
+    color_chrome_effect: str | None = None
+    white_balance: str | None = None
+    highlights: str | None = None
+    shadows: str | None = None
+    color: str | None = None
+    sharpness: str | None = None
+    noise_reduction: str | None = None
+
+
+class FujifilmRecipe(BaseModel):
+    """The real in-camera recipe read from a Fujifilm photo's MakerNotes.
+
+    ``applicable`` is False whenever the shot wasn't taken on a Fujifilm body
+    (or an older Fuji model with no film-simulation recipe data) — there is no
+    AI-recommended fallback."""
+
+    applicable: bool = False
+    film_simulation: str | None = None
+    settings: FujifilmRecipeSettings | None = None
+
+
 class ColorSwatch(BaseModel):
     hex: str
     rgb: list[int]
@@ -192,6 +218,9 @@ class AnalysisResponse(BaseModel):
     composition: CompositionInfo = Field(
         ..., description="Geometric composition metrics."
     )
+    recipe: FujifilmRecipe = Field(
+        ..., description="Real in-camera Fujifilm recipe, read from MakerNotes."
+    )
 
 
 # --- Phase 3: AI analysis --------------------------------------------------
@@ -253,28 +282,6 @@ class SemanticComposition(BaseModel):
     negative_space: SemanticScore | None = None
 
 
-class FujifilmRecipeSettings(BaseModel):
-    grain: str | None = None
-    color_chrome_effect: str | None = None
-    white_balance: str | None = None
-    highlights: float | None = None
-    shadows: float | None = None
-    color: float | None = None
-    sharpness: float | None = None
-    noise_reduction: float | None = None
-
-
-class FujifilmRecipe(BaseModel):
-    """A Fujifilm film-simulation recipe recommendation (Phase 4).
-
-    ``applicable`` is False when the shot was not taken on a Fujifilm body."""
-
-    applicable: bool | None = None
-    film_simulation: str | None = None
-    settings: FujifilmRecipeSettings | None = None
-    reasoning: str | None = None
-
-
 class AIAnalysis(BaseModel):
     """Vision-language interpretation of the photo (Phase 3).
 
@@ -291,7 +298,6 @@ class AIAnalysis(BaseModel):
     composition_critique: CompositionCritique | None = None
     recreation_guide: list[str] = Field(default_factory=list)
     semantic_composition: SemanticComposition | None = None
-    fujifilm_recipe: FujifilmRecipe | None = None
 
 
 class AIAnalysisResponse(BaseModel):

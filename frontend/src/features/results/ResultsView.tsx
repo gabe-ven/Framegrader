@@ -50,7 +50,7 @@ export function ResultsView({
           previewUrl={previewUrl}
           exif={result?.exif ?? null}
           composition={result?.composition ?? null}
-          recipe={ai?.fujifilm_recipe?.applicable === true ? ai.fujifilm_recipe : null}
+          recipe={result?.recipe?.applicable === true ? result.recipe : null}
           canEdit={status === "success"}
           onChooseAnother={onChooseAnother}
           onEditPhoto={onEditPhoto}

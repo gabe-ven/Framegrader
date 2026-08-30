@@ -1,5 +1,5 @@
 import { AnimatePresence, animate, motion, useMotionValue } from "framer-motion";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { PhotoSkeleton } from "@/components/Shimmer";
 import { EditPage } from "@/features/edit/EditPage";
 import { ResultsView } from "@/features/results/ResultsView";
@@ -29,8 +29,15 @@ export function UploadPanel() {
   } = useImageAnalysis();
   const [view, setView] = useState<"results" | "editing">("results");
 
+  // The hero's headline-slide + card-dealing entrance is a first-impression
+  // flourish. Once a file has been selected once, "Choose another" returns
+  // here repeatedly within the same session — replaying a ~1.3s animation
+  // every time reads as lag, not delight, so later hero mounts skip it.
+  const heroSeenRef = useRef(false);
+
   useEffect(() => {
     setView("results");
+    if (file) heroSeenRef.current = true;
   }, [file]);
 
   // Gated on the CV request only. The AI critique takes ~17s longer than
@@ -51,7 +58,7 @@ export function UploadPanel() {
     <AnimatePresence mode="popLayout">
       {stage === "hero" && (
         <motion.div key="hero" exit={{ opacity: 0 }}>
-          <HeroSection onFile={selectFile} error={error} />
+          <HeroSection onFile={selectFile} error={error} skipIntro={heroSeenRef.current} />
         </motion.div>
       )}
 
@@ -114,7 +121,7 @@ export function UploadPanel() {
         <EditPage
           key="editing"
           file={file}
-          ai={ai}
+          recipe={result?.recipe?.applicable === true ? result.recipe : null}
           histogram={result?.vision?.histogram ?? null}
           colorGrade={colorGrade}
           colorGradeStatus={colorGradeStatus}

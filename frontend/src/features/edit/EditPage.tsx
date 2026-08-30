@@ -14,8 +14,8 @@ import {
   type ToneCurve,
 } from "./toneCurve";
 import type {
-  AIAnalysis,
   ColorGradeResponse,
+  FujifilmRecipe,
   FujifilmRecipeSettings,
   GradingAdjustments,
   Histogram,
@@ -25,6 +25,16 @@ function clampValue(v: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, v));
 }
 
+// The recipe's tone/color/sharpness fields are exiftool's human-readable
+// strings straight off the camera, e.g. "+2 (hard)" or "-1 (medium soft)" —
+// every one of Fuji's tone dials leads with the signed step count, so pulling
+// that back out is what the slider math below needs.
+function leadingSignedNumber(value: string | null): number | null {
+  if (!value) return null;
+  const match = value.match(/^[+-]?\d+/);
+  return match ? Number(match[0]) : null;
+}
+
 // Fujifilm's in-camera tone/color/sharpness dials don't line up 1:1 with
 // these sliders, so each is rescaled from its typical camera-menu range
 // onto the slider's own range rather than copied verbatim.
@@ -32,17 +42,21 @@ function fujifilmRecipeToAdjustments(
   settings: FujifilmRecipeSettings,
 ): Partial<GradingAdjustments> {
   const next: Partial<GradingAdjustments> = {};
-  if (settings.highlights !== null) {
-    next.highlights = clampValue(settings.highlights * 25, -100, 100);
+  const highlights = leadingSignedNumber(settings.highlights);
+  const shadows = leadingSignedNumber(settings.shadows);
+  const color = leadingSignedNumber(settings.color);
+  const sharpness = leadingSignedNumber(settings.sharpness);
+  if (highlights !== null) {
+    next.highlights = clampValue(highlights * 25, -100, 100);
   }
-  if (settings.shadows !== null) {
-    next.shadows = clampValue(settings.shadows * 25, -100, 100);
+  if (shadows !== null) {
+    next.shadows = clampValue(shadows * 25, -100, 100);
   }
-  if (settings.color !== null) {
-    next.saturation = clampValue(settings.color * 25, -100, 100);
+  if (color !== null) {
+    next.saturation = clampValue(color * 25, -100, 100);
   }
-  if (settings.sharpness !== null) {
-    next.sharpness = clampValue(((settings.sharpness + 4) / 8) * 100, 0, 100);
+  if (sharpness !== null) {
+    next.sharpness = clampValue(((sharpness + 4) / 8) * 100, 0, 100);
   }
   // noise_reduction has no slider equivalent — skipped.
   return next;
@@ -171,7 +185,7 @@ const DETAIL_SLIDERS: SliderConfig[] = [
 
 interface EditPageProps {
   file: File;
-  ai: AIAnalysis | null;
+  recipe: FujifilmRecipe | null;
   histogram: Histogram | null;
   colorGrade: ColorGradeResponse | null;
   colorGradeStatus: "idle" | "loading" | "success" | "error";
@@ -182,7 +196,7 @@ interface EditPageProps {
 
 export function EditPage({
   file,
-  ai,
+  recipe,
   histogram,
   colorGrade,
   colorGradeStatus,
@@ -287,10 +301,9 @@ export function EditPage({
   const setField = (key: keyof GradingAdjustments, value: number) =>
     setAdjustments((prev) => ({ ...prev, [key]: value }));
 
-  const fujifilmRecipe = ai?.fujifilm_recipe;
   const applyFujifilmRecipe = () => {
-    if (!fujifilmRecipe?.settings) return;
-    const targets = fujifilmRecipeToAdjustments(fujifilmRecipe.settings);
+    if (!recipe?.settings) return;
+    const targets = fujifilmRecipeToAdjustments(recipe.settings);
     (Object.entries(targets) as [keyof GradingAdjustments, number | undefined][]).forEach(
       ([key, target]) => {
         if (target === undefined) return;
@@ -421,12 +434,12 @@ export function EditPage({
             {renderSliderGroup(DETAIL_SLIDERS)}
           </Section>
 
-          {fujifilmRecipe?.applicable && fujifilmRecipe.settings && (
+          {recipe?.applicable && recipe.settings && (
             <button
               onClick={applyFujifilmRecipe}
               className="w-full bg-[#0a0a0a] px-4 py-3 font-mono text-xs uppercase tracking-widest text-white transition-colors hover:bg-[#2a2a2a]"
             >
-              Apply {fujifilmRecipe.film_simulation ?? "Fujifilm"} Recipe
+              Apply {recipe.film_simulation ?? "Fujifilm"} Recipe
             </button>
           )}
 

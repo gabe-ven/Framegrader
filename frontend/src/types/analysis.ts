@@ -30,6 +30,30 @@ export interface ExifInfo {
   gps: GpsCoordinates | null;
 }
 
+/** Values are exiftool's already human-readable strings (e.g. "+2 (hard)",
+ * "Classic Chrome") read straight from the camera's MakerNotes — not AI
+ * output. */
+export interface FujifilmRecipeSettings {
+  grain: string | null;
+  color_chrome_effect: string | null;
+  white_balance: string | null;
+  highlights: string | null;
+  shadows: string | null;
+  color: string | null;
+  sharpness: string | null;
+  noise_reduction: string | null;
+}
+
+/** The real in-camera recipe read from a Fujifilm photo's MakerNotes.
+ * `applicable` is false for any non-Fujifilm camera (or an older Fuji model
+ * with no film-simulation recipe data) — there is no AI-recommended
+ * fallback. */
+export interface FujifilmRecipe {
+  applicable: boolean;
+  film_simulation: string | null;
+  settings: FujifilmRecipeSettings | null;
+}
+
 export interface ColorSwatch {
   hex: string;
   rgb: number[];
@@ -194,6 +218,7 @@ export interface AnalysisResponse {
   exif: ExifInfo;
   vision: VisionInfo;
   composition: CompositionInfo;
+  recipe: FujifilmRecipe;
 }
 
 // --- Phase 3: AI analysis --------------------------------------------------
@@ -250,24 +275,6 @@ export interface SemanticComposition {
   negative_space: SemanticScore | null;
 }
 
-export interface FujifilmRecipeSettings {
-  grain: string | null;
-  color_chrome_effect: string | null;
-  white_balance: string | null;
-  highlights: number | null;
-  shadows: number | null;
-  color: number | null;
-  sharpness: number | null;
-  noise_reduction: number | null;
-}
-
-export interface FujifilmRecipe {
-  applicable: boolean | null;
-  film_simulation: string | null;
-  settings: FujifilmRecipeSettings | null;
-  reasoning: string | null;
-}
-
 export interface AIAnalysis {
   available: boolean;
   reason: string | null;
@@ -278,7 +285,6 @@ export interface AIAnalysis {
   composition_critique: CompositionCritique | null;
   recreation_guide: string[];
   semantic_composition: SemanticComposition | null;
-  fujifilm_recipe: FujifilmRecipe | null;
 }
 
 export interface AIAnalysisResponse {

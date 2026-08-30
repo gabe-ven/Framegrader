@@ -8,6 +8,7 @@ import json
 from fastapi.testclient import TestClient
 from PIL import Image
 
+from app.core.config import get_settings
 from app.main import app
 from app.services.ai import photo_critique
 from app.services.ai.photo_critique import build_context_summary, generate_critique
@@ -222,3 +223,54 @@ def test_ai_endpoint_tolerates_malformed_context(monkeypatch) -> None:
     )
     assert response.status_code == 200
     assert captured["context"] is None
+
+
+# --- Paused mode ----------------------------------------------------------
+
+
+def test_placeholder_critique_validates_against_the_schema() -> None:
+    """The placeholder must satisfy AIAnalysis, or a paused build 500s."""
+    from app.schemas.analysis import AIAnalysis
+
+    model = AIAnalysis(**photo_critique.placeholder_critique())
+    assert model.available is True
+    assert model.reason is None
+    # Every text field should announce itself, so paused output can never be
+    # mistaken for a real critique.
+    assert "placeholder" in (model.scene.summary or "").lower()
+    assert "paused" in (model.composition_critique.overall or "").lower()
+    assert model.recreation_guide
+
+
+def test_ai_endpoint_serves_placeholder_when_paused(monkeypatch) -> None:
+    """Paused: the placeholder comes back and Claude is never called."""
+
+    def _boom(*args, **kwargs):
+        raise AssertionError("generate_critique must not run while paused")
+
+    monkeypatch.setattr(photo_critique, "generate_critique", _boom)
+    monkeypatch.setenv("AI_ANALYSIS_PAUSED", "true")
+    get_settings.cache_clear()
+    try:
+        files = {"file": ("test.png", _png_bytes(), "image/png")}
+        response = client.post("/api/ai-analysis", files=files)
+    finally:
+        get_settings.cache_clear()
+
+    assert response.status_code == 200
+    ai = response.json()["ai"]
+    assert ai["available"] is True
+    assert "placeholder" in ai["scene"]["summary"].lower()
+
+
+def test_paused_endpoint_still_rejects_a_non_image(monkeypatch) -> None:
+    """Pausing the model must not turn the endpoint into a blanket 200."""
+    monkeypatch.setenv("AI_ANALYSIS_PAUSED", "true")
+    get_settings.cache_clear()
+    try:
+        files = {"file": ("notes.txt", b"hello world", "text/plain")}
+        response = client.post("/api/ai-analysis", files=files)
+    finally:
+        get_settings.cache_clear()
+
+    assert response.status_code == 422

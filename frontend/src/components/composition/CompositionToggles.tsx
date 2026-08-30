@@ -38,7 +38,7 @@ export function CompositionToggles({
 
   if (variant === "rows") {
     return (
-      <div className="flex flex-col">
+      <div className="flex flex-wrap gap-4">
         {toggleDefs.map((def) => {
           const active = toggles[def.key];
           const on = def.available && active;
@@ -48,7 +48,7 @@ export function CompositionToggles({
               type="button"
               disabled={!def.available}
               onClick={() => onToggle(def.key)}
-              className={`flex w-full items-center gap-3 border-b border-border py-2 font-mono text-xs uppercase tracking-widest transition-colors ${
+              className={`flex items-center gap-2 font-mono text-xs uppercase tracking-widest transition-colors ${
                 !def.available
                   ? "cursor-not-allowed text-subtle"
                   : active

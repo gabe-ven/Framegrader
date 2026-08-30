@@ -86,9 +86,14 @@ const SAMPLE_PRINTS = [
 interface HeroSectionProps {
   onFile: (file: File) => void;
   error: string | null;
+  /** Skip the headline-slide + card-dealing entrance and render already
+   * settled. Set once the hero has already played this animation earlier in
+   * the session (e.g. returning here via "Choose another"), so the flourish
+   * only plays on first impression, not every return trip. */
+  skipIntro?: boolean;
 }
 
-export function HeroSection({ onFile, error }: HeroSectionProps) {
+export function HeroSection({ onFile, error, skipIntro = false }: HeroSectionProps) {
   // The prints rest at an angle by design, but their arrival — sliding and
   // un-rotating into place — is decoration. Drop it when asked to.
   const reduceMotion = useReducedMotion();
@@ -173,7 +178,7 @@ export function HeroSection({ onFile, error }: HeroSectionProps) {
           <div className="flex flex-col items-start text-left">
             <h1 className="font-sans text-[2.9rem] font-black uppercase leading-[0.92] tracking-tight text-black sm:text-6xl lg:text-7xl xl:text-[5.25rem]">
               <motion.span
-                initial={{ y: 40, opacity: 0 }}
+                initial={skipIntro ? false : { y: 40, opacity: 0 }}
                 animate={{ y: 0, opacity: 1 }}
                 transition={HERO_SPRING}
                 className="block"
@@ -181,7 +186,7 @@ export function HeroSection({ onFile, error }: HeroSectionProps) {
                 Upload a photograph.
               </motion.span>
               <motion.span
-                initial={{ y: 40, opacity: 0 }}
+                initial={skipIntro ? false : { y: 40, opacity: 0 }}
                 animate={{ y: 0, opacity: 1 }}
                 transition={{ ...HERO_SPRING, delay: 0.08 }}
                 className="block"
@@ -236,9 +241,11 @@ export function HeroSection({ onFile, error }: HeroSectionProps) {
               <motion.div
                 key={print.id}
                 initial={
-                  reduceMotion
-                    ? { opacity: 0, rotate: print.tilt }
-                    : { opacity: 0, scale: 0.9, rotate: print.tilt - 8 }
+                  skipIntro
+                    ? false
+                    : reduceMotion
+                      ? { opacity: 0, rotate: print.tilt }
+                      : { opacity: 0, scale: 0.9, rotate: print.tilt - 8 }
                 }
                 animate={{ opacity: 1, scale: 1, rotate: print.tilt }}
                 transition={{
@@ -268,7 +275,7 @@ export function HeroSection({ onFile, error }: HeroSectionProps) {
 
         {/* --- The three capabilities, as a catalogue index rather than cards. --- */}
         <motion.div
-          initial={{ scaleX: 0 }}
+          initial={skipIntro ? false : { scaleX: 0 }}
           animate={{ scaleX: 1 }}
           transition={{ ...HERO_SPRING, delay: 0.3 }}
           className="h-1 origin-left bg-black"

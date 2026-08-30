@@ -90,29 +90,11 @@ _SYSTEM_PROMPT = (
     "    },\n"
     '    "rule_of_thirds": { "score": 0-100, "reasoning": "under 10 words" },\n'
     '    "negative_space": { "score": 0-100, "reasoning": "under 10 words" }\n'
-    "  },\n"
-    '  "fujifilm_recipe": {\n'
-    '    "applicable": true/false (false when the EXIF camera make is not Fujifilm, or EXIF is absent),\n'
-    '    "film_simulation": "e.g. Classic Chrome, Eterna, Velvia, Provia, Astia, Acros, Nostalgic Neg",\n'
-    '    "settings": {\n'
-    '      "grain": "e.g. Weak Small / Strong Large / Off",\n'
-    '      "color_chrome_effect": "Off | Weak | Strong",\n'
-    '      "white_balance": "e.g. Auto / Daylight / 5500K, R+1 B-1",\n'
-    '      "highlights": number (Fujifilm tone, typically -2 to +4),\n'
-    '      "shadows": number (typically -2 to +4),\n'
-    '      "color": number (typically -4 to +4),\n'
-    '      "sharpness": number (typically -4 to +4),\n'
-    '      "noise_reduction": number (typically -4 to +4)\n'
-    "    },\n"
-    '    "reasoning": "why this recipe fits, under 12 words"\n'
     "  }\n"
     "}\n"
     "Judge semantic_composition from the image itself — this is your independent, "
     "meaning-aware read, and it intentionally REPLACES the geometric CV scores for "
     "leading lines, rule of thirds, and negative space. "
-    "For fujifilm_recipe, recommend a film simulation and in-camera settings that suit "
-    "the scene and light; set applicable to false when the EXIF camera make is not a "
-    "Fujifilm body (including when no EXIF is present), but still provide a usable recipe. "
     "Be specific and practical. Prefer concrete photographic advice over generic praise, "
     "and prefer a terse phrase over a complete sentence wherever the shape above allows it."
 )
@@ -204,6 +186,74 @@ def build_context_summary(context: dict[str, Any] | None) -> str:
 
 def _unavailable(reason: str) -> dict[str, Any]:
     return {"available": False, "reason": reason}
+
+
+def placeholder_critique() -> dict[str, Any]:
+    """A fixed, obviously-fake critique served while AI analysis is paused.
+
+    ``available`` is True so the report renders its full layout — the point is
+    to exercise the UI — but every string announces itself as placeholder text
+    so a paused build is never mistaken for a real critique. Costs nothing and
+    makes no network call.
+    """
+    return {
+        "available": True,
+        "reason": None,
+        "scene": {
+            "summary": "Placeholder scene summary — AI analysis is paused.",
+            "setting": "Placeholder setting",
+            "tags": ["placeholder", "ai-paused", "sample"],
+        },
+        "subject": {
+            "primary": "Placeholder subject",
+            "description": "Placeholder subject description — AI analysis is paused.",
+        },
+        "lighting": {
+            "summary": "Placeholder lighting summary — AI analysis is paused.",
+            "direction": "Placeholder direction",
+            "quality": "Placeholder quality",
+            "time_of_day": "Placeholder time of day",
+        },
+        "camera_settings": {
+            "aperture": "f/8",
+            "shutter_speed": "1/250s",
+            "iso": "200",
+            "focal_length": "35mm",
+            "from_exif": False,
+            "reasoning": "Placeholder reasoning — AI analysis is paused.",
+        },
+        "composition_critique": {
+            "strengths": [
+                "Placeholder strength one — AI analysis is paused.",
+                "Placeholder strength two — AI analysis is paused.",
+            ],
+            "improvements": [
+                "Placeholder improvement one — AI analysis is paused.",
+                "Placeholder improvement two — AI analysis is paused.",
+            ],
+            "overall": "Placeholder overall assessment — AI analysis is paused.",
+        },
+        "recreation_guide": [
+            "Placeholder step one — AI analysis is paused.",
+            "Placeholder step two — AI analysis is paused.",
+            "Placeholder step three — AI analysis is paused.",
+        ],
+        "semantic_composition": {
+            "leading_lines": {
+                "present": True,
+                "strength": 60.0,
+                "description": "Placeholder leading-lines note — AI analysis is paused.",
+            },
+            "rule_of_thirds": {
+                "score": 70.0,
+                "reasoning": "Placeholder rule-of-thirds note — AI analysis is paused.",
+            },
+            "negative_space": {
+                "score": 50.0,
+                "reasoning": "Placeholder negative-space note — AI analysis is paused.",
+            },
+        },
+    }
 
 
 def generate_critique(

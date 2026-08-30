@@ -43,13 +43,14 @@ from app.schemas.analysis import (
     ColorGradeResponse,
     CompositionInfo,
     ExifInfo,
+    FujifilmRecipe,
     ImageInfo,
     VisionInfo,
 )
 from app.services import image_io
 from app.services.ai import color_grading, photo_critique
 from app.services.composition import composition_pipeline
-from app.services.exif import exif_service
+from app.services.exif import exif_service, fuji_recipe_service
 from app.services.vision import analysis_pipeline
 
 router = APIRouter(tags=["analysis"])
@@ -96,6 +97,10 @@ def analyze(
         dimensions=original_size,
     )
     exif = exif_service.extract_exif(image)
+    # Reads real MakerNote data (via exiftool) straight from the uploaded
+    # bytes — must happen before downscaling/re-encoding below, which would
+    # strip it.
+    recipe = fuji_recipe_service.extract_fuji_recipe(data, exif.get("make"))
 
     # Cap working resolution before the pixel pipelines run. describe_image and
     # the EXIF read above already captured everything that must reflect the
@@ -115,6 +120,7 @@ def analyze(
         exif=ExifInfo(**exif),
         vision=VisionInfo(**vision),
         composition=CompositionInfo(**composition),
+        recipe=FujifilmRecipe(**recipe),
     )
 
 
@@ -155,6 +161,12 @@ def ai_analysis(
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
         ) from exc
+
+    # Paused: return the placeholder without building a prompt or calling
+    # Claude. Kept after upload validation so a bad file still gets its 422 —
+    # the endpoint's contract shouldn't change just because the model is off.
+    if settings.ai_analysis_paused:
+        return AIAnalysisResponse(ai=AIAnalysis(**photo_critique.placeholder_critique()))
 
     parsed_context: dict | None = None
     if context:

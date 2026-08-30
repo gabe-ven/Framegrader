@@ -13,6 +13,7 @@ from collections.abc import Iterator
 
 import pytest
 
+from app.core.config import get_settings
 from app.core.rate_limit import limiter
 
 
@@ -38,3 +39,17 @@ def rate_limited() -> Iterator[None]:
     yield
     limiter.enabled = False
     limiter.reset()
+
+
+@pytest.fixture(autouse=True)
+def _unpaused_ai(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
+    """Run every test against a live (mocked) AI path, not a paused one.
+
+    AI_ANALYSIS_PAUSED is read from backend/.env, so whether it is on depends
+    on the machine the suite happens to run on. Pinning it off here keeps the
+    suite hermetic; the tests that cover paused mode set it back on themselves.
+    """
+    monkeypatch.setenv("AI_ANALYSIS_PAUSED", "false")
+    get_settings.cache_clear()
+    yield
+    get_settings.cache_clear()

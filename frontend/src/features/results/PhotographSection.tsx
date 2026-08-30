@@ -20,7 +20,8 @@ interface PhotographSectionProps {
   previewUrl: string | null;
   exif: ExifInfo | null;
   composition: CompositionInfo | null;
-  /** Fujifilm film-recipe, when the AI deemed one applicable (Fuji bodies). */
+  /** The real in-camera Fujifilm recipe read from MakerNotes, when the shot
+   * was taken on a Fuji body. Never AI-generated. */
   recipe: FujifilmRecipe | null;
   canEdit: boolean;
   onChooseAnother: () => void;
@@ -42,6 +43,7 @@ export function PhotographSection({
 }: PhotographSectionProps) {
   const [dims, setDims] = useState<Dimensions | null>(null);
   const [introPlayed, setIntroPlayed] = useState(false);
+  const [activeTab, setActiveTab] = useState<"exif" | "recipe">("exif");
   const linesAvailable = composition ? composition.leading_lines.lines.length > 0 : false;
   const horizonAvailable = composition ? composition.horizon.horizon_detected : false;
 
@@ -92,34 +94,43 @@ export function PhotographSection({
     : [];
 
   const rs = recipe?.settings;
-  const recipeRows: Array<[string, string]> = rs
+  const recipeRows: Array<[string, string]> = recipe
     ? ([
-        ["Grain", rs.grain],
-        ["Color Chrome", rs.color_chrome_effect],
-        ["White Balance", rs.white_balance],
-        ["Highlights", rs.highlights != null ? signed(rs.highlights) : null],
-        ["Shadows", rs.shadows != null ? signed(rs.shadows) : null],
-        ["Color", rs.color != null ? signed(rs.color) : null],
-        ["Sharpness", rs.sharpness != null ? signed(rs.sharpness) : null],
-        ["Noise Reduction", rs.noise_reduction != null ? signed(rs.noise_reduction) : null],
+        ["Film Simulation", recipe.film_simulation],
+        ["Grain", rs?.grain],
+        ["Color Chrome", rs?.color_chrome_effect],
+        ["White Balance", rs?.white_balance],
+        ["Highlights", rs?.highlights],
+        ["Shadows", rs?.shadows],
+        ["Color", rs?.color],
+        ["Sharpness", rs?.sharpness],
+        ["Noise Reduction", rs?.noise_reduction],
       ].filter((row): row is [string, string] => row[1] != null))
     : [];
+
+  const hasExifData = Boolean(exif?.has_exif) && exifRows.length > 0;
+  const hasRecipeData = Boolean(recipe) && recipeRows.length > 0;
+  const showDataTabs = hasExifData || hasRecipeData;
 
   return (
     <div className="flex flex-col gap-8">
       <div className="relative left-1/2 h-1 w-screen -translate-x-1/2 bg-black" />
 
-      <div className="grid grid-cols-5 items-start gap-8">
+      <div className="grid grid-cols-5 gap-8">
         {/* Photo — left, dominant. Shown uncropped (object-contain) and
             top-aligned with the info column, so its top edge lines up with
             the camera-name heading instead of floating in whatever leftover
             space a vertical-center trick leaves above it.
-            Height is capped (object-contain lets it shrink to fit) so a
-            portrait or very-high-res upload can't blow the photo — and with
-            it, the whole section — past several screens of scrolling. The
-            overlay SVG and edge canvas both fit the same box the same way
-            (object-contain / preserveAspectRatio="meet"), so they stay
-            pixel-aligned with the photo at any capped size. */}
+            The frame hugs the image's own rendered box (w-fit, no forced
+            width) rather than stretching to the column — otherwise a
+            portrait photo capped by max-h ends up much narrower than the
+            column, and object-contain's letterboxing shows up as dead space
+            *inside* the border instead of the border just shrinking to fit.
+            Height is still capped so a very-high-res upload can't blow the
+            photo — and with it, the whole section — past several screens of
+            scrolling. The overlay SVG fills this same shrink-wrapped box
+            (absolute inset-0, so it doesn't affect the fit-content sizing),
+            keeping it pixel-aligned with the photo at any size. */}
         <div className="col-span-3">
           {/* The border/shadow live on this outer wrapper, not the image
               itself: the composition overlay is pixel-aligned to the inner
@@ -127,8 +138,8 @@ export function PhotographSection({
               change the image's rendered content box — like a border
               directly on the <img> — would throw that alignment off by the
               border's width. Wrapping it keeps the inner box untouched. */}
-          <div className="border-4 border-black bg-white p-2 shadow-[10px_10px_0_0_#000]">
-            <div className="relative w-full overflow-hidden bg-bg">
+          <div className="w-fit border-4 border-black bg-white p-2 shadow-[10px_10px_0_0_#000]">
+            <div className="relative w-fit overflow-hidden bg-bg">
               {previewUrl ? (
                 <motion.img
                   layoutId="photo-preview"
@@ -141,10 +152,10 @@ export function PhotographSection({
                   onLoad={(e) =>
                     handleLoad(e.currentTarget.naturalWidth, e.currentTarget.naturalHeight)
                   }
-                  className="block max-h-[min(65vh,680px)] w-full select-none object-contain"
+                  className="block h-auto max-h-[75vh] w-auto max-w-full select-none object-contain"
                 />
               ) : (
-                <PhotoSkeleton className="aspect-[3/2] w-full" />
+                <PhotoSkeleton />
               )}
 
               {composition && previewUrl && (
@@ -160,68 +171,83 @@ export function PhotographSection({
           </div>
         </div>
 
-        {/* Info — right */}
-        <div className="col-span-2 flex flex-col">
-          <h2 className="font-sans text-2xl font-semibold text-text">
-            {cameraName(exif, file.name)}
-          </h2>
+        {/* Info — right. Stretched to the photo column's height (grid's
+            default cross-axis stretch) so the button row can be pinned to
+            the bottom, flush with the photo's bottom edge, while the data
+            cards stack tightly at the top. */}
+        <div className="col-span-2 flex h-full w-full flex-col justify-between">
+          <div className="w-full space-y-6">
+            <h2 className="w-full font-sans text-2xl font-semibold text-text">
+              {cameraName(exif, file.name)}
+            </h2>
 
-          {exif?.has_exif && (
-            <dl className="mt-4">
-              {exifRows.map(([label, value]) => (
-                <DataRow key={label} label={label} value={value ?? "—"} />
-              ))}
-            </dl>
-          )}
+            {showDataTabs && (
+              <div className="w-full border-4 border-black bg-white shadow-[8px_8px_0_0_#000]">
+                <div className="flex border-b-4 border-black">
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab("exif")}
+                    className={`flex-1 border-r-4 border-black px-4 py-3 font-mono text-xs font-black uppercase tracking-widest transition-colors ${
+                      activeTab === "exif" ? "bg-yellow-400 text-black" : "bg-white text-subtle hover:text-text"
+                    }`}
+                  >
+                    Exif Data
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab("recipe")}
+                    className={`flex-1 px-4 py-3 font-mono text-xs font-black uppercase tracking-widest transition-colors ${
+                      activeTab === "recipe" ? "bg-yellow-400 text-black" : "bg-white text-subtle hover:text-text"
+                    }`}
+                  >
+                    Film Recipe
+                  </button>
+                </div>
 
-          {recipe && (recipe.film_simulation || recipeRows.length > 0) && (
-            <>
-              <div className="mt-6 mb-3 flex items-baseline justify-between gap-4">
-                <span className="font-mono text-[10px] uppercase tracking-widest text-subtle">
-                  Fujifilm Recipe
-                </span>
-                {recipe.film_simulation && (
-                  <span className="font-display text-xl text-text">
-                    {recipe.film_simulation}
-                  </span>
-                )}
+                <div className="p-4">
+                  {activeTab === "exif" ? (
+                    hasExifData ? (
+                      <dl className="grid grid-cols-2 gap-x-8 gap-y-3">
+                        {exifRows.map(([label, value]) => (
+                          <DataCell key={label} label={label} value={value ?? "—"} />
+                        ))}
+                      </dl>
+                    ) : (
+                      <p className="font-sans text-xs text-muted">No EXIF data for this photo.</p>
+                    )
+                  ) : hasRecipeData ? (
+                    <dl className="grid grid-cols-2 gap-x-8 gap-y-3">
+                      {recipeRows.map(([label, value]) => (
+                        <DataCell key={label} label={label} value={value} />
+                      ))}
+                    </dl>
+                  ) : (
+                    <p className="font-sans text-xs text-muted">No Fujifilm recipe for this camera.</p>
+                  )}
+                </div>
               </div>
-              <hr />
-              {recipeRows.length > 0 && (
-                <dl>
-                  {recipeRows.map(([label, value]) => (
-                    <DataRow key={label} label={label} value={value} />
-                  ))}
-                </dl>
-              )}
-              {recipe.reasoning && (
-                <p className="mt-3 font-sans text-xs text-muted">{recipe.reasoning}</p>
-              )}
-            </>
-          )}
+            )}
 
-          {composition && (
-            <>
-              <div className="mt-6 mb-3">
-                <span className="font-mono text-[10px] uppercase tracking-widest text-subtle">
+            {composition && (
+              <div className="w-full border-4 border-black p-4 shadow-[4px_4px_0_0_#000]">
+                <h3 className="mb-3 font-mono text-xs font-black uppercase tracking-widest text-text">
                   Composition Layers
-                </span>
+                </h3>
+                <CompositionToggles
+                  variant="rows"
+                  toggles={toggles}
+                  onToggle={toggle}
+                  linesAvailable={linesAvailable}
+                  horizonAvailable={horizonAvailable}
+                />
               </div>
-              <hr className="mb-2" />
-              <CompositionToggles
-                variant="rows"
-                toggles={toggles}
-                onToggle={toggle}
-                linesAvailable={linesAvailable}
-                horizonAvailable={horizonAvailable}
-              />
-            </>
-          )}
+            )}
+          </div>
 
-          <div className="mt-8">
+          <div className={`mt-8 grid w-full gap-4 ${canEdit ? "grid-cols-2" : "grid-cols-1"}`}>
             <button
               onClick={onChooseAnother}
-              className="block w-full border-4 border-black bg-white px-4 py-3 text-center font-sans text-sm font-black uppercase tracking-tight text-black shadow-[6px_6px_0_0_#000] transition-transform hover:translate-x-1 hover:translate-y-1 hover:shadow-[3px_3px_0_0_#000] active:translate-x-[6px] active:translate-y-[6px] active:shadow-none"
+              className="border-4 border-black bg-white px-4 py-3 text-center font-sans text-sm font-black uppercase tracking-tight text-black shadow-[6px_6px_0_0_#000] transition-transform hover:translate-x-1 hover:translate-y-1 hover:shadow-[3px_3px_0_0_#000] active:translate-x-[6px] active:translate-y-[6px] active:shadow-none"
             >
               Choose another
             </button>
@@ -243,7 +269,7 @@ function EditPhotoButton({ onClick }: { onClick: () => void }) {
       onClick={onClick}
       onHoverStart={() => animate(arrowX, 4, ARROW_SPRING)}
       onHoverEnd={() => animate(arrowX, 0, ARROW_SPRING)}
-      className="mt-3 block w-full border-4 border-black bg-red-500 px-4 py-3 text-center font-sans text-sm font-black uppercase tracking-tight text-white shadow-[6px_6px_0_0_#000] transition-transform hover:translate-x-1 hover:translate-y-1 hover:shadow-[3px_3px_0_0_#000] active:translate-x-[6px] active:translate-y-[6px] active:shadow-none"
+      className="border-4 border-black bg-red-500 px-4 py-3 text-center font-sans text-sm font-black uppercase tracking-tight text-white shadow-[6px_6px_0_0_#000] transition-transform hover:translate-x-1 hover:translate-y-1 hover:shadow-[3px_3px_0_0_#000] active:translate-x-[6px] active:translate-y-[6px] active:shadow-none"
     >
       Edit photo{" "}
       <motion.span className="inline-block" style={{ x: arrowX }}>
@@ -253,13 +279,13 @@ function EditPhotoButton({ onClick }: { onClick: () => void }) {
   );
 }
 
-/** One label/value row shared by the EXIF table and the recipe settings, so
- * both share identical structure, sizing, and rhythm. */
-function DataRow({ label, value }: { label: string; value: string }) {
+/** One label/value cell shared by the EXIF and recipe data grids, so both
+ * share identical structure, sizing, and rhythm. */
+function DataCell({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex items-baseline justify-between gap-4 border-b border-border py-2.5">
+    <div>
       <dt className="font-mono text-[10px] uppercase tracking-widest text-subtle">{label}</dt>
-      <dd className="text-right font-mono text-sm font-medium text-text">{value}</dd>
+      <dd className="mt-1 font-mono text-sm font-medium text-text">{value}</dd>
     </div>
   );
 }
@@ -270,9 +296,4 @@ function cameraName(exif: ExifInfo | null, filename: string): string {
   if (!exif || !exif.has_exif) return filename;
   const name = [exif.make, exif.model].filter(Boolean).join(" ").trim();
   return name || filename;
-}
-
-/** Fujifilm recipe adjustments are signed values, e.g. "+2" / "-1". */
-function signed(n: number): string {
-  return n > 0 ? `+${n}` : `${n}`;
 }

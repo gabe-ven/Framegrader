@@ -50,6 +50,12 @@ class Settings(BaseSettings):
     # buffer. Cuts peak decode memory for a 26MP frame from ~238MB to ~86MB.
     # 0 disables it and decodes at full resolution.
     decode_max_edge: int = 1920
+    # Pause the Claude critique and serve a fixed placeholder instead. Set
+    # AI_ANALYSIS_PAUSED=true while iterating on the frontend so the report
+    # renders end-to-end without spending an Anthropic call per upload. The
+    # placeholder text says so on its face, so a paused build can never be
+    # mistaken for a real critique.
+    ai_analysis_paused: bool = False
 
     @property
     def allowed_origins_list(self) -> list[str]:
