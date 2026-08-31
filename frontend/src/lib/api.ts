@@ -42,7 +42,20 @@ export function validateFile(file: File): string | null {
 
 /** Callers pass an API path; the configured base is applied in one place. */
 async function postForm<T>(path: string, body: FormData): Promise<T> {
-  const res = await fetch(`${API_BASE_URL}${path}`, { method: "POST", body });
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE_URL}${path}`, { method: "POST", body });
+  } catch {
+    // fetch only rejects when the request never got a response at all — the
+    // server is down, the connection dropped mid-flight (a backend restart
+    // during a long AI call does this), or DNS/CORS refused it. The browser's
+    // own message for all of these is the bare "Failed to fetch", which tells
+    // the user nothing about what to do, so name the actual condition.
+    throw new ApiError(
+      "Couldn't reach the analysis server — it may be restarting or stopped. " +
+        "Check the backend is running, then try again.",
+    );
+  }
 
   if (!res.ok) {
     let detail = `Request failed (${res.status}).`;
