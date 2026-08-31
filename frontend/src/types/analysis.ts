@@ -71,6 +71,7 @@ export interface Histogram {
   r: number[];
   g: number[];
   b: number[];
+  luminance: number[];
 }
 
 export interface DynamicRange {
@@ -305,6 +306,10 @@ export interface GradingAdjustments {
   saturation: number;
   vibrance: number;
   sharpness: number;
+  noise_reduction: number;
+  clarity: number;
+  vignette: number;
+  grain: number;
 }
 
 export type ColorGradeStyle =

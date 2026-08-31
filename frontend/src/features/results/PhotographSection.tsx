@@ -284,8 +284,8 @@ function EditPhotoButton({ onClick }: { onClick: () => void }) {
 function DataCell({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <dt className="font-mono text-[10px] uppercase tracking-widest text-subtle">{label}</dt>
-      <dd className="mt-1 font-mono text-sm font-medium text-text">{value}</dd>
+      <dt className="font-sans text-[10px] uppercase tracking-widest text-subtle">{label}</dt>
+      <dd className="mt-1 font-mono text-sm font-medium tracking-tighter text-text">{value}</dd>
     </div>
   );
 }

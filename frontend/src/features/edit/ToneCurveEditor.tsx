@@ -55,7 +55,7 @@ export function ToneCurveEditor({ curve, onChange, histogram }: ToneCurveEditorP
         showSymbol: false,
         silent: true,
         lineStyle: { width: 0 },
-        areaStyle: { color: "rgba(255,255,255,0.14)" },
+        areaStyle: { color: "rgba(0,0,0,0.16)" },
         z: 1,
       });
     }
@@ -64,7 +64,7 @@ export function ToneCurveEditor({ curve, onChange, histogram }: ToneCurveEditorP
       data: curveLine,
       showSymbol: false,
       silent: true,
-      lineStyle: { color: "#ffffff", width: 1.5 },
+      lineStyle: { color: "#000000", width: 4 },
       z: 2,
     });
 
@@ -82,19 +82,28 @@ export function ToneCurveEditor({ curve, onChange, histogram }: ToneCurveEditorP
   // sync on curve change and container resize. Stable ids let ECharts update
   // them in place rather than recreate them, so an in-flight drag isn't dropped.
   useEffect(() => {
-    const chart = chartRef.current?.getEchartsInstance() as ECharts | undefined;
-    if (!chart) return;
+    let cancelled = false;
+    let raf = 0;
+    let observer: ResizeObserver | undefined;
 
-    // echarts-for-react can hand back an instance whose internal model hasn't
-    // been built yet — this effect can run before the chart has applied its own
-    // setOption. convertToPixel dereferences that model, so calling it early
-    // throws ("Cannot read properties of undefined (reading 'queryComponents')")
-    // and took the whole editor down with it. Every conversion is gated on the
-    // model existing; `finished` below is the retry for the not-yet-ready case.
-    const isReady = () => !chart.isDisposed() && chart.getOption() != null;
+    // Resolve the instance on every use rather than capturing it once.
+    // echarts-for-react disposes and recreates its instance across React's
+    // double-mount, so an effect that closes over the first one holds a dead
+    // reference forever — isReady() then fails on every call and the drag
+    // handles are never added, leaving a curve that renders but cannot be
+    // moved. Re-reading the ref means we always talk to the live chart.
+    const liveChart = (): ECharts | null => {
+      const c = chartRef.current?.getEchartsInstance() as ECharts | undefined;
+      if (!c || c.isDisposed()) return null;
+      // echarts-for-react can hand back an instance whose internal model has
+      // not been built yet; convertToPixel dereferences that model and throws
+      // ("Cannot read properties of undefined (reading 'queryComponents')").
+      return c.getOption() != null ? c : null;
+    };
 
     const position = () => {
-      if (!isReady()) return;
+      const chart = liveChart();
+      if (!chart) return;
       const handles = CURVE_INPUTS.map((inX, i) => {
         const [px, py] = chart.convertToPixel({ gridIndex: 0 }, [inX, curveRef.current[i]]);
         return {
@@ -102,18 +111,19 @@ export function ToneCurveEditor({ curve, onChange, histogram }: ToneCurveEditorP
           type: "circle",
           x: px,
           y: py,
-          shape: { cx: 0, cy: 0, r: 5 },
-          style: { fill: "#ffffff", stroke: "#111111", lineWidth: 1 },
+          shape: { cx: 0, cy: 0, r: 7 },
+          style: { fill: "#facc15", stroke: "#000000", lineWidth: 3 },
           draggable: true,
           cursor: "ns-resize",
           z: 100,
           ondrag: function (this: { x: number; y: number }) {
             // zrender drag callbacks run outside React, so a throw here escapes
-            // every error boundary — guard rather than rely on one.
-            if (!isReady()) return;
+            // every error boundary — resolve and guard rather than rely on one.
+            const c = liveChart();
+            if (!c) return;
             // Lock x to the anchor's column — only vertical drags change output.
-            this.x = chart.convertToPixel({ gridIndex: 0 }, [inX, 0])[0];
-            const dataY = chart.convertFromPixel({ gridIndex: 0 }, [this.x, this.y])[1];
+            this.x = c.convertToPixel({ gridIndex: 0 }, [inX, 0])[0];
+            const dataY = c.convertFromPixel({ gridIndex: 0 }, [this.x, this.y])[1];
             const y = Math.max(0, Math.min(255, dataY));
             const next = normalizeCurve(curveRef.current.map((v, j) => (j === i ? y : v)));
             onChangeRef.current(next);
@@ -123,41 +133,38 @@ export function ToneCurveEditor({ curve, onChange, histogram }: ToneCurveEditorP
       chart.setOption({ graphic: handles });
     };
 
-    let observer: ResizeObserver | undefined;
-
-    const start = () => {
+    // Poll a frame at a time until a live, initialised instance exists. This
+    // replaces waiting on the chart's "finished" event, which fired on the
+    // instance that then got disposed.
+    const startWhenReady = () => {
+      if (cancelled) return;
+      const chart = liveChart();
+      if (!chart) {
+        raf = requestAnimationFrame(startWhenReady);
+        return;
+      }
       position();
       const dom = chart.getDom();
-      if (!dom) return;
-      observer = new ResizeObserver(position);
-      observer.observe(dom);
+      if (dom) {
+        observer = new ResizeObserver(position);
+        observer.observe(dom);
+      }
     };
-
-    // Fires after the first render pass, by which point the model exists.
-    // Detached on entry so the setOption inside position() can't re-trigger it.
-    const onFinished = () => {
-      chart.off("finished", onFinished);
-      start();
-    };
-
-    if (isReady()) {
-      start();
-    } else {
-      chart.on("finished", onFinished);
-    }
+    startWhenReady();
 
     return () => {
-      if (!chart.isDisposed()) chart.off("finished", onFinished);
+      cancelled = true;
+      cancelAnimationFrame(raf);
       observer?.disconnect();
     };
   }, [curve, lumData]);
 
   return (
-    <div className="mt-4">
-      <span className="font-mono text-[10px] uppercase tracking-widest text-muted">
+    <div className="mt-6">
+      <span className="inline-block border-4 border-black bg-yellow-400 px-3 py-1 font-mono text-[10px] font-black uppercase tracking-widest text-black shadow-[4px_4px_0_0_#000]">
         Tone curve
       </span>
-      <div className="mt-2 border border-[#e0e0e0]" style={{ background: "#111111" }}>
+      <div className="mt-3 border-4 border-black" style={{ background: "#ffffff" }}>
         <ReactECharts
           ref={chartRef}
           option={option}
@@ -166,7 +173,7 @@ export function ToneCurveEditor({ curve, onChange, histogram }: ToneCurveEditorP
           opts={{ renderer: "canvas" }}
         />
       </div>
-      <div className="mt-1.5 flex justify-between font-mono text-[8px] uppercase tracking-widest text-muted">
+      <div className="mt-2 flex justify-between font-mono text-[9px] font-black uppercase tracking-widest text-black">
         {CURVE_LABELS.map((label) => (
           <span key={label}>{label}</span>
         ))}

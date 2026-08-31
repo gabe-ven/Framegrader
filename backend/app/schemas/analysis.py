@@ -85,6 +85,7 @@ class Histogram(BaseModel):
     r: list[int]
     g: list[int]
     b: list[int]
+    luminance: list[int]
 
 
 class DynamicRange(BaseModel):
@@ -322,6 +323,10 @@ class GradingAdjustments(BaseModel):
     saturation: float = 0.0
     vibrance: float = 0.0
     sharpness: float = 0.0
+    noise_reduction: float = 0.0
+    clarity: float = 0.0
+    vignette: float = 0.0
+    grain: float = 0.0
 
 
 class ColorGradeResponse(BaseModel):

@@ -25,10 +25,14 @@
   --color-cream: #ffffff;
   --color-tag-bg: #f0f0f0;
   --color-tag-text: #0a0a0a;
+  /* The ground the whole app sits on. Every view paints this same cream, so a
+     frame where one page has unmounted and the next has not yet painted shows
+     the page colour rather than a white flash. */
+  --color-page: #fffbeb;
 }
 
 body {
-  background-color: var(--color-bg);
+  background-color: var(--color-page);
   color: var(--color-text);
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
@@ -40,7 +44,7 @@ body {
    --color-bg/--color-border/--color-tag-bg, without touching the edit page
    or any other stage that still uses the original monochrome palette. */
 .theme-comic {
-  --color-bg: #fffbeb;
+  --color-bg: var(--color-page);
   --color-bg-off: #fef3c7;
   --color-border: #000000;
   --color-border-strong: #000000;
@@ -60,48 +64,63 @@ button:not(:disabled) {
   cursor: pointer;
 }
 
-/* Edit sliders: each instance sets --slider-gradient inline (a custom
-   property, so it cascades into the vendor pseudo-elements below) to paint
-   a track that hints at what the slider actually does. */
+/* Edit sliders, neobrutalist. The old control was a 3px hairline track
+   carrying a per-slider colour gradient; the printed-ink treatment wants one
+   heavy mechanical control repeated, not eleven tinted ones. Track is a solid
+   black rail, thumb a chunky square with a 4px black border and its own hard
+   offset shadow.
+   Thumb centring: the track box is 8px + 2px border top and bottom = 12px, so
+   a 22px thumb needs margin-top: (12 - 22) / 2 = -5px. WebKit needs this
+   explicitly; Firefox centres ::-moz-range-thumb on its own. */
 input[type="range"].control-slider {
   -webkit-appearance: none;
   appearance: none;
   width: 100%;
-  height: 14px;
+  height: 26px;
   background: transparent;
   margin: 0;
 }
 
 input[type="range"].control-slider::-webkit-slider-runnable-track {
-  height: 3px;
+  height: 8px;
+  border: 2px solid #000000;
   border-radius: 0;
-  background: var(--slider-gradient, var(--color-border));
+  background: #000000;
 }
 
 input[type="range"].control-slider::-moz-range-track {
-  height: 3px;
+  height: 8px;
+  border: 2px solid #000000;
   border-radius: 0;
-  background: var(--slider-gradient, var(--color-border));
+  background: #000000;
 }
 
 input[type="range"].control-slider::-webkit-slider-thumb {
   -webkit-appearance: none;
-  width: 14px;
-  height: 14px;
+  width: 22px;
+  height: 22px;
   margin-top: -5px;
-  border-radius: 50%;
-  border: 2px solid #ffffff;
-  background: #0a0a0a;
-  box-shadow: 0 0 0 1px #0a0a0a;
+  border-radius: 0;
+  border: 4px solid #000000;
+  background: #facc15;
+  box-shadow: 3px 3px 0 0 #000000;
   cursor: pointer;
 }
 
 input[type="range"].control-slider::-moz-range-thumb {
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
-  border: 2px solid #ffffff;
-  background: #0a0a0a;
-  box-shadow: 0 0 0 1px #0a0a0a;
+  width: 22px;
+  height: 22px;
+  border-radius: 0;
+  border: 4px solid #000000;
+  background: #facc15;
+  box-shadow: 3px 3px 0 0 #000000;
   cursor: pointer;
+}
+
+input[type="range"].control-slider:focus-visible::-webkit-slider-thumb {
+  background: #ef4444;
+}
+
+input[type="range"].control-slider:focus-visible::-moz-range-thumb {
+  background: #ef4444;
 }

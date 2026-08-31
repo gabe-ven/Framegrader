@@ -5,13 +5,13 @@ import type { Histogram } from "@/types/analysis";
 
 type Channel = "r" | "g" | "b";
 
-// Muted channel colors tuned for the white, editorial chart background —
-// light fills with a firmer stroke rather than the vivid glow a dark
-// background would call for.
-const CHANNEL_STYLES: Record<Channel, { fill: string; stroke: string }> = {
-  r: { fill: "rgba(220,50,50,0.12)", stroke: "rgba(220,50,50,0.7)" },
-  g: { fill: "rgba(50,160,50,0.12)", stroke: "rgba(50,160,50,0.7)" },
-  b: { fill: "rgba(50,80,220,0.12)", stroke: "rgba(50,80,220,0.7)" },
+// Solid, fully-opaque channel colors traced as bold outlines (no area fill —
+// three overlapping opaque fills would just bury each other, which is the
+// one thing an RGB histogram can't afford to do).
+const CHANNEL_STYLES: Record<Channel, { stroke: string }> = {
+  r: { stroke: "#ff0000" },
+  g: { stroke: "#00a63e" },
+  b: { stroke: "#0000ff" },
 };
 
 const VIEW_W = 400;
@@ -38,18 +38,21 @@ export function RGBHistogram({ histogram }: { histogram: Histogram }) {
       d3.max(histogram.b) ?? 0,
     );
     const y = d3.scaleLinear().domain([0, maxCount]).range([VIEW_H, 0]);
-    const area = d3
-      .area<number>()
+    // A stroke-only line (not a filled area) — an opaque fill per channel
+    // would just bury whichever channel draws last. curveMonotoneX smooths
+    // for readability without ever overshooting past the real bin values,
+    // unlike curveBasis (a B-spline approximation that doesn't pass through
+    // the actual data points).
+    const line = d3
+      .line<number>()
       .x((_d, i) => x(i))
-      .y0(VIEW_H)
-      .y1((d) => y(d))
-      .curve(d3.curveBasis);
+      .y((d) => y(d))
+      .curve(d3.curveMonotoneX);
     const limit = maxCount * CLIP_THRESHOLD;
     return {
-      r: area(histogram.r) ?? "",
-      g: area(histogram.g) ?? "",
-      b: area(histogram.b) ?? "",
-      midX: x((n - 1) / 2),
+      r: line(histogram.r) ?? "",
+      g: line(histogram.g) ?? "",
+      b: line(histogram.b) ?? "",
       clipShadow: [histogram.r[0], histogram.g[0], histogram.b[0]].some(
         (v) => v >= limit,
       ),
@@ -64,37 +67,28 @@ export function RGBHistogram({ histogram }: { histogram: Histogram }) {
   const channels: Channel[] = ["r", "g", "b"];
 
   return (
-    <div className="border-t border-border pt-4">
-      <span className="font-mono text-[10px] uppercase tracking-widest text-muted">
+    <div className="border-t-4 border-black pt-4">
+      <span className="font-sans text-xs font-black uppercase tracking-widest text-muted">
         Histogram
       </span>
-      <div className="relative mt-2 border-b border-border">
+      <div className="relative mt-2 border-4 border-black bg-white">
         <svg
           viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
           preserveAspectRatio="none"
           className="block h-[180px] w-full"
           aria-label="RGB histogram"
         >
-          <line
-            x1={paths.midX}
-            x2={paths.midX}
-            y1={0}
-            y2={VIEW_H}
-            stroke="#e0e0e0"
-            strokeWidth={1}
-            strokeDasharray="2 2"
-          />
           {channels.map(
             (c, i) =>
               visible[c] && (
                 <motion.path
                   key={c}
                   d={paths[c]}
-                  fill={CHANNEL_STYLES[c].fill}
+                  fill="none"
                   stroke={CHANNEL_STYLES[c].stroke}
-                  strokeWidth={1}
-                  initial={{ pathLength: 0, fillOpacity: 0 }}
-                  animate={{ pathLength: 1, fillOpacity: 1 }}
+                  strokeWidth={4}
+                  initial={{ pathLength: 0 }}
+                  animate={{ pathLength: 1 }}
                   transition={{ duration: 0.8, ease: "easeOut", delay: i * 0.1 }}
                 />
               ),
@@ -132,7 +126,7 @@ export function RGBHistogram({ histogram }: { histogram: Histogram }) {
             type="button"
             onClick={() => setVisible((v) => ({ ...v, [c]: !v[c] }))}
             aria-pressed={visible[c]}
-            className="mr-4 font-mono text-[10px] uppercase tracking-widest"
+            className="mr-4 font-mono text-xs font-black uppercase tracking-widest"
             style={{ color: visible[c] ? CHANNEL_STYLES[c].stroke : "#999999" }}
           >
             <span style={{ color: visible[c] ? CHANNEL_STYLES[c].stroke : "#999999" }}>

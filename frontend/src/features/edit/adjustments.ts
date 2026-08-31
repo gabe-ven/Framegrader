@@ -12,4 +12,8 @@ export const ZERO_ADJUSTMENTS: GradingAdjustments = {
   saturation: 0,
   vibrance: 0,
   sharpness: 0,
+  noise_reduction: 0,
+  clarity: 0,
+  vignette: 0,
+  grain: 0,
 };

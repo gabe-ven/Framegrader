@@ -108,9 +108,32 @@ def test_histogram_counts_sum_to_pixels() -> None:
     img = np.random.randint(0, 256, (16, 16, 3), dtype=np.uint8)
     hist = compute_histogram(img, bins=256)
     assert hist["bins"] == 256
-    for channel in ("r", "g", "b"):
+    for channel in ("r", "g", "b", "luminance"):
         assert len(hist[channel]) == 256
         assert sum(hist[channel]) == 16 * 16
+
+
+def test_histogram_luminance_is_per_pixel_not_marginal() -> None:
+    """A flat mid-gray image: (128, 128, 128) has real luminance 128.
+    A marginal recombination would land on the same value here by
+    coincidence (r == g == b), so use two flat halves with different, very
+    saturated colors instead — a case where per-channel marginals and true
+    per-pixel luminance genuinely diverge."""
+    top = np.full((8, 16, 3), (255, 0, 0), dtype=np.uint8)  # pure red
+    bottom = np.full((8, 16, 3), (0, 0, 255), dtype=np.uint8)  # pure blue
+    img = np.concatenate([top, bottom], axis=0)
+    hist = compute_histogram(img, bins=256)
+
+    # True per-pixel luminance: red -> ~76, blue -> ~29 (Rec. 601 weights).
+    # Half the pixels each. A marginal-recombination approach would instead
+    # produce one shared bin (fully-correlated per-channel peaks summed as
+    # if independent), which does not match either real value. peak_bins is
+    # sorted by bin index (ascending luminance), so blue's lower value comes
+    # first regardless of its position in the image.
+    peak_bins = [i for i, c in enumerate(hist["luminance"]) if c > 0]
+    assert len(peak_bins) == 2
+    assert 27 <= peak_bins[0] <= 31
+    assert 74 <= peak_bins[1] <= 78
 
 
 # --- dynamic range --------------------------------------------------------

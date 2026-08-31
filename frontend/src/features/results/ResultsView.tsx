@@ -34,10 +34,9 @@ export function ResultsView({
 }: ResultsViewProps) {
   return (
     <motion.div
-      initial={{ opacity: 0, y: 12 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0 }}
-      transition={{ duration: 0.4, ease: "easeOut" }}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.12, ease: "easeOut" }}
       className="theme-comic relative left-1/2 w-screen -translate-x-1/2 bg-bg py-16"
     >
       {/* Re-establish the max-5xl reading width App.tsx would otherwise

@@ -7,15 +7,22 @@ export const SECTION_LINE_SPRING: Transition = { type: "spring", stiffness: 60, 
 export const SECTION_LABEL_SPRING: Transition = { type: "spring", stiffness: 100, damping: 22 };
 
 /**
- * Section entrance/exit tied to the section mounting (not scroll position) —
- * for report sections that appear together as a group and should cascade in
- * with a stagger, then animate out together if the whole report unmounts.
+ * Section entrance tied to the section mounting (not scroll position) — for
+ * report sections that appear together as a group and cascade in with a
+ * stagger.
+ *
+ * Entrance only, deliberately. These sections unmount exactly once: when the
+ * report is replaced by the editor. An `exit` here made AnimatePresence hold
+ * the entire results tree mounted until every section had finished animating
+ * out — and because `delay` applies to exit as well, that staggered out to
+ * ~1.4s during which the editor was rendered below the still-present report
+ * and therefore off-screen. Leaving exit off lets the swap happen in one
+ * commit.
  */
 export function sectionMount(delay = 0) {
   return {
     initial: { opacity: 0, y: 24 },
     animate: { opacity: 1, y: 0 },
-    exit: { opacity: 0, y: -12 },
     transition: { type: "spring" as const, stiffness: 80, damping: 20, delay },
   };
 }

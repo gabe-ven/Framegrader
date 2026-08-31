@@ -57,7 +57,7 @@ export function CompositionToggles({
               }`}
             >
               <span
-                className={`inline-block h-3 w-3 shrink-0 border border-current ${on ? "bg-current" : ""}`}
+                className={`inline-block h-3 w-3 shrink-0 border-2 border-current ${on ? "bg-current" : ""}`}
               />
               <span>{def.label}</span>
               {!def.available && <span className="text-subtle">(none)</span>}
@@ -81,7 +81,7 @@ export function CompositionToggles({
             whileHover={def.available ? { scale: 0.98 } : undefined}
             whileTap={def.available ? { scale: 0.95 } : undefined}
             transition={PILL_SPRING}
-            className={`flex items-center gap-2 border px-3 py-1.5 font-mono text-[10px] uppercase tracking-wide transition-colors ${
+            className={`flex items-center gap-2 border-2 px-3 py-1.5 font-mono text-[10px] uppercase tracking-wide transition-colors ${
               !def.available
                 ? "cursor-not-allowed border-border text-subtle"
                 : active

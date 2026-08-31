@@ -40,13 +40,21 @@ export function UploadPanel() {
     if (file) heroSeenRef.current = true;
   }, [file]);
 
-  // Gated on the CV request only. The AI critique takes ~17s longer than
-  // /analyze, so waiting on it here held the whole report behind a full-screen
-  // animation. Leaving "analyzing" as soon as the measurements land lets the
-  // report paint at ~2s, with the critique streaming into its own skeleton.
+  // Held until BOTH requests finish: the CV measurements and the AI critique.
+  // The report therefore appears complete rather than filling in piecewise,
+  // at the cost of a longer wait on the loading screen — the critique runs
+  // ~15s behind /analyze.
+  //
+  // `aiStatus === "error"` deliberately does not keep us here: a failed
+  // critique must fall through to the report (which renders its own error
+  // state) rather than trapping the user on the loading animation forever.
+  // analyze() sets status:"success" and aiStatus:"loading" in the same
+  // synchronous block after its first await, so React batches them into one
+  // render — there is no frame where the report flashes up before the AI
+  // request has been marked as started.
   const stage: Stage = !file
     ? "hero"
-    : status === "loading"
+    : status === "loading" || aiStatus === "loading"
       ? "analyzing"
       : status === "idle"
         ? "preview"
@@ -66,7 +74,12 @@ export function UploadPanel() {
           full analyzing animation until everything is ready, then reveal
           the report. */}
       {stage === "analyzing" && file && (
-        <AnalyzingView key="analyzing" previewUrl={previewUrl} fileName={file.name} />
+        <AnalyzingView
+          key="analyzing"
+          previewUrl={previewUrl}
+          fileName={file.name}
+          phase={status === "loading" ? "measuring" : "critique"}
+        />
       )}
 
       {/* Photo selected but not analyzed yet — big preview, actions underneath.
@@ -121,7 +134,6 @@ export function UploadPanel() {
         <EditPage
           key="editing"
           file={file}
-          recipe={result?.recipe?.applicable === true ? result.recipe : null}
           histogram={result?.vision?.histogram ?? null}
           colorGrade={colorGrade}
           colorGradeStatus={colorGradeStatus}
@@ -154,32 +166,46 @@ export function UploadPanel() {
   );
 }
 
-const LOADING_MESSAGES = [
+// Split by which request is actually in flight rather than run off one timer.
+// The measurement pass is a sequence of real steps and reads well as a list;
+// the critique is a single ~13s call, so a rotating list there would be
+// inventing progress that isn't happening.
+const MEASURING_MESSAGES = [
   "Reading EXIF metadata…",
   "Measuring exposure & contrast…",
   "Extracting dominant colors…",
   "Locating the subject…",
   "Tracing leading lines…",
   "Reading the composition…",
-  "Composing the critique…",
 ];
+const CRITIQUE_MESSAGE = "Composing the critique…";
 
 function AnalyzingView({
   previewUrl,
   fileName,
+  phase,
 }: {
   previewUrl: string | null;
   fileName: string;
+  /** Which request is in flight — drives what the caption says. */
+  phase: "measuring" | "critique";
 }) {
   const [messageIndex, setMessageIndex] = useState(0);
 
+  // Advance through the measurement steps and stop on the last one rather
+  // than wrapping: looping back to "Reading EXIF metadata…" after the metrics
+  // are already in reads as if the app restarted.
   useEffect(() => {
+    if (phase !== "measuring") return;
     const id = setInterval(
-      () => setMessageIndex((n) => (n + 1) % LOADING_MESSAGES.length),
+      () => setMessageIndex((n) => Math.min(n + 1, MEASURING_MESSAGES.length - 1)),
       1700,
     );
     return () => clearInterval(id);
-  }, []);
+  }, [phase]);
+
+  const message =
+    phase === "critique" ? CRITIQUE_MESSAGE : MEASURING_MESSAGES[messageIndex];
 
   return (
     <motion.div
@@ -200,18 +226,14 @@ function AnalyzingView({
           <PhotoSkeleton className="h-[480px] w-[360px]" />
         )}
 
-        {/* Sweeping glow band + bright scan edge. */}
+        {/* Scanner beam: a flat, hard-edged band (no gradient fade, no glow
+            blur) that sweeps at constant speed — a mechanical scan, not a
+            soft glow. Black trailing edge, solid red leading edge. */}
         <motion.div
-          className="pointer-events-none absolute inset-x-0 h-28 bg-gradient-to-b from-transparent via-white/20 to-transparent"
-          initial={{ top: "-25%" }}
-          animate={{ top: ["-25%", "105%"] }}
-          transition={{ duration: 1.9, repeat: Infinity, ease: "easeInOut" }}
-        />
-        <motion.div
-          className="pointer-events-none absolute inset-x-0 h-1 bg-red-500 shadow-[0_0_14px_2px_rgba(239,68,68,0.7)]"
-          initial={{ top: "-25%" }}
-          animate={{ top: ["-25%", "105%"] }}
-          transition={{ duration: 1.9, repeat: Infinity, ease: "easeInOut" }}
+          className="pointer-events-none absolute inset-x-0 h-24 border-y-4 border-t-black border-b-red-500 bg-yellow-400/30"
+          initial={{ top: "-20%" }}
+          animate={{ top: ["-20%", "100%"] }}
+          transition={{ duration: 1.9, repeat: Infinity, ease: "linear" }}
         />
 
         <CornerBrackets />
@@ -222,14 +244,14 @@ function AnalyzingView({
         <div className="h-5">
           <AnimatePresence mode="wait">
             <motion.p
-              key={messageIndex}
+              key={message}
               initial={{ opacity: 0, y: 6 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -6 }}
               transition={{ duration: 0.3 }}
               className="font-mono text-sm font-black uppercase tracking-wide text-black"
             >
-              {LOADING_MESSAGES[messageIndex]}
+              {message}
             </motion.p>
           </AnimatePresence>
         </div>
@@ -261,7 +283,7 @@ function AnalyzeButton({ onClick }: { onClick: () => void }) {
 function Spinner() {
   return (
     <motion.div
-      className="h-9 w-9 rounded-full border-4 border-black/20 border-t-black"
+      className="h-8 w-8 border-4 border-black/20 border-t-black border-r-black"
       animate={{ rotate: 360 }}
       transition={{ duration: 0.9, repeat: Infinity, ease: "linear" }}
     />

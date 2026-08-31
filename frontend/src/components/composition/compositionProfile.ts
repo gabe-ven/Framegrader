@@ -1,7 +1,8 @@
 // Derives a 0-100 composition profile from real CompositionInfo fields.
 // Every value here traces back to a measured backend metric — nothing is
-// fabricated. Shared by CompositionRadar (the chart) and CompositionSummary
-// (the textual takeaways) so both stay in lockstep.
+// fabricated. Shared by CompositionSummary (the score card) and
+// MeasurementsSection (the semantic-scored stats table rows) so both stay
+// in lockstep.
 
 import type {
   CompositionInfo,

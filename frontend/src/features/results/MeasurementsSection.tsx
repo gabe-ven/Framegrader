@@ -1,14 +1,11 @@
-import { AnimatePresence, motion } from "framer-motion";
-import { useState } from "react";
-import { ColorSpaceCloud } from "@/components/ColorSpaceCloud";
-import { CompositionOverlayPanel } from "@/components/composition/CompositionOverlayPanel";
+import { motion } from "framer-motion";
+import { CompositionSummary } from "@/components/composition/CompositionSummary";
 import {
   applySemanticToProfile,
   buildCompositionProfile,
 } from "@/components/composition/compositionProfile";
 import { DataStrip, type DataStripItem } from "@/components/DataStrip";
 import { DominantColors } from "@/components/DominantColors";
-import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { LuminanceChart } from "@/components/LuminanceChart";
 import { RGBHistogram } from "@/components/RGBHistogram";
 import { Section } from "@/components/Section";
@@ -37,11 +34,11 @@ export function MeasurementsSection({
 }: MeasurementsSectionProps) {
   return (
     <motion.div {...sectionMount(delay)}>
-      <Section number="02" title="MEASUREMENTS">
+      <Section title="MEASUREMENTS">
         {loading ? (
           <MeasurementsSkeleton />
         ) : error ? (
-          <div className="border border-text bg-bg-off px-4 py-3 font-mono text-sm text-text">
+          <div className="border-4 border-black bg-red-100 px-4 py-3 font-mono text-sm font-bold text-black shadow-[4px_4px_0_0_#000]">
             {error}
           </div>
         ) : !vision || !composition || !imageUrl ? (
@@ -49,12 +46,7 @@ export function MeasurementsSection({
             Run the analysis to compute brightness, contrast, composition scores, and more.
           </p>
         ) : (
-          <MeasurementsContent
-            vision={vision}
-            composition={composition}
-            semantic={semantic}
-            imageUrl={imageUrl}
-          />
+          <MeasurementsContent vision={vision} composition={composition} semantic={semantic} />
         )}
       </Section>
     </motion.div>
@@ -65,15 +57,11 @@ function MeasurementsContent({
   vision,
   composition,
   semantic,
-  imageUrl,
 }: {
   vision: VisionInfo;
   composition: CompositionInfo;
   semantic: SemanticComposition | null;
-  imageUrl: string;
 }) {
-  const [overlayOpen, setOverlayOpen] = useState(false);
-
   const visionItems: DataStripItem[] = [
     {
       label: "Brightness",
@@ -118,69 +106,36 @@ function MeasurementsContent({
     {
       label: "Rule of Thirds",
       value: `${Math.round(rot.value)}%`,
-      aiSourced: semantic?.rule_of_thirds?.score != null,
     },
     {
       label: "Leading Lines",
       value: lines.applicable ? `${Math.round(lines.value)}%` : "—",
-      aiSourced: Boolean(
-        semantic?.leading_lines &&
-          (semantic.leading_lines.strength != null || semantic.leading_lines.present != null),
-      ),
     },
     {
       label: "Negative Space",
       value: `${Math.round(ns.value)}%`,
-      aiSourced: semantic?.negative_space?.score != null,
     },
   ];
 
+  // One heavy 3×3 diagnostic table — vision's six metrics and composition's
+  // three read as a single instrument panel, not two separate ledgers.
+  const statsItems = [...visionItems, ...compositionItems];
+
+  // Each block below is already a self-contained heavy box or carries its own
+  // border-t-4 rule — space-y lets those do the separating instead of
+  // stacking a divider on top of a divider.
   return (
-    <div>
-      <DataStrip items={visionItems} />
-      <hr className="my-8" />
+    <div className="space-y-8">
+      <DataStrip items={statsItems} />
 
-      <DataStrip items={compositionItems} />
-      <hr className="my-8" />
-
-      <button
-        type="button"
-        onClick={() => setOverlayOpen((v) => !v)}
-        className="font-mono text-xs text-muted underline cursor-pointer"
-      >
-        {overlayOpen ? "Hide composition detail" : "View composition detail"}
-      </button>
-      <AnimatePresence initial={false}>
-        {overlayOpen && (
-          <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: "auto", opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.3, ease: "easeInOut" }}
-            className="overflow-hidden"
-          >
-            <CompositionOverlayPanel
-              composition={composition}
-              semantic={semantic}
-              imageUrl={imageUrl}
-            />
-          </motion.div>
-        )}
-      </AnimatePresence>
-      <hr className="my-8" />
+      <CompositionSummary composition={composition} semantic={semantic} />
 
       <DominantColors colors={vision.dominant_colors} />
-      <hr className="my-8" />
 
       <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
         <RGBHistogram histogram={vision.histogram} />
         <LuminanceChart histogram={vision.histogram} />
       </div>
-      <hr className="my-8" />
-
-      <ErrorBoundary label="Color space">
-        <ColorSpaceCloud samples={vision.color_samples} />
-      </ErrorBoundary>
     </div>
   );
 }
@@ -198,20 +153,16 @@ function sharpnessContext(value: number): string {
 
 function MeasurementsSkeleton() {
   return (
-    <div className="space-y-10">
-      <div className="flex gap-4">
-        {Array.from({ length: 6 }).map((_, i) => (
-          <div key={i} className="relative h-16 flex-1 overflow-hidden bg-border">
+    <div className="space-y-8">
+      <div className="grid grid-cols-3 gap-1 border-4 border-black p-1">
+        {Array.from({ length: 9 }).map((_, i) => (
+          <div key={i} className="relative h-20 overflow-hidden bg-border">
             <ShimmerOverlay />
           </div>
         ))}
       </div>
-      <div className="flex gap-4 border-t border-border pt-8">
-        {Array.from({ length: 3 }).map((_, i) => (
-          <div key={i} className="relative h-16 flex-1 overflow-hidden bg-border">
-            <ShimmerOverlay />
-          </div>
-        ))}
+      <div className="relative h-32 overflow-hidden border-4 border-black bg-border">
+        <ShimmerOverlay />
       </div>
       <div className="relative h-16 overflow-hidden bg-border">
         <ShimmerOverlay />

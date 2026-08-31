@@ -19,32 +19,10 @@ const FEATURE_HINTS = [
 ];
 
 /**
- * A self-contained stand-in for the real photography, drawn as an SVG data
- * URI: the gallery stack composes correctly with no network request and no
- * broken-image icon before any files exist. Just a dark gradient and a
- * horizon line — deliberately quiet rather than trying to fake a scene, so
- * it reads as a minimalist night frame instead of a placeholder graphic.
- * `seed` nudges the horizon a little per plate so the three don't look like
- * the same rectangle repeated.
- */
-function nightPlate(seed: number): string {
-  const horizonY = 52 + (seed % 5) * 3;
-  const svg =
-    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" preserveAspectRatio="none">` +
-    `<defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1">` +
-    `<stop offset="0" stop-color="#080d17"/>` +
-    `<stop offset="0.5" stop-color="#16202f"/>` +
-    `<stop offset="1" stop-color="#04060a"/>` +
-    `</linearGradient></defs>` +
-    `<rect width="100" height="100" fill="url(#g)"/>` +
-    `<rect y="${horizonY}" width="100" height="0.4" fill="#ffffff" opacity="0.18"/>` +
-    `</svg>`;
-  return `data:image/svg+xml,${encodeURIComponent(svg)}`;
-}
-
-/**
- * The gallery stack. Swap each `src` for real work — drop files in
- * `frontend/public/samples/` and point at `/samples/<name>.jpg`.
+ * The gallery stack — real shots, dropped in `frontend/public/samples/` and
+ * served as static assets. EXIF (make/model/focal length/aperture) is read
+ * straight from each file via exiftool, same as everything else this app
+ * ever shows the user: measured, not invented.
  *
  * Each card is one rigid box: border, background, and shadow live on the
  * outermost element, the photo is a plain child with only a bottom border,
@@ -58,26 +36,26 @@ function nightPlate(seed: number): string {
  */
 const SAMPLE_PRINTS = [
   {
-    id: "cityscape",
-    src: nightPlate(1),
-    alt: "Sample photograph — night cityscape",
-    meta: "Fujifilm X-T30 III • 23mm • f/1.4",
+    id: "tokyo-crossing",
+    src: "/samples/tokyo-crossing.jpg",
+    alt: "Sample photograph — Shibuya crossing from above at night",
+    meta: "Fujifilm X-T30 III • 27mm • f/10",
     position: "top-0 right-6 z-10 sm:right-32 lg:right-[34%]",
     tilt: -6,
   },
   {
-    id: "bridge",
-    src: nightPlate(5),
-    alt: "Sample photograph — suspension bridge after dark",
-    meta: "Fujifilm X-T30 III • 35mm • f/1.4",
+    id: "neon-blur",
+    src: "/samples/neon-blur.jpg",
+    alt: "Sample photograph — long-exposure motion blur of neon signage",
+    meta: "Fujifilm X-S20 • 38mm • f/2.8",
     position: "top-[22%] right-2 z-20 sm:right-10 lg:right-[16%]",
     tilt: 2,
   },
   {
-    id: "harbour",
-    src: nightPlate(9),
-    alt: "Sample photograph — harbour lights",
-    meta: "Fujifilm X-T30 III • 50mm • f/1.2",
+    id: "mountain-temple",
+    src: "/samples/mountain-temple.jpg",
+    alt: "Sample photograph — temple rooftops against a mountain skyline",
+    meta: "Fujifilm X-S20 • 50mm • f/5.6",
     position: "top-[38%] right-8 z-30 sm:right-0 lg:right-[8%]",
     tilt: 12,
   },

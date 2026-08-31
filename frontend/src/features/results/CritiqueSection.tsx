@@ -23,8 +23,7 @@ export function CritiqueSection({
   return (
     <motion.div {...sectionMount(delay)}>
       <Section
-        number="01"
-        title="AI CRITIQUE"
+        title="Critique"
         action={
           loading ? (
             <span className="border-4 border-black bg-tag-bg px-3 py-1 font-mono text-xs font-black uppercase tracking-widest text-tag-text shadow-[4px_4px_0_0_#000]">
@@ -110,7 +109,7 @@ function CritiqueContent({ ai, exif }: { ai: AIAnalysis; exif: ExifInfo | null }
       {/* --- Masthead: spans all 12 columns --- */}
       <div className="border-b-4 border-black bg-yellow-400 p-6 md:col-span-12">
         {headline && (
-          <p className="font-sans text-4xl font-black uppercase leading-[0.95] tracking-tighter text-black md:text-6xl">
+          <p className="font-mono text-4xl font-black uppercase leading-[0.95] tracking-tighter text-black md:text-6xl">
             {headline}
           </p>
         )}
@@ -177,7 +176,7 @@ function CritiqueContent({ ai, exif }: { ai: AIAnalysis; exif: ExifInfo | null }
                 key={i}
                 className="border-b-2 border-black/25 py-4 first:pt-0 last:border-b-0 last:pb-0"
               >
-                <span className="block font-mono text-5xl font-black leading-none">
+                <span className="block font-mono text-5xl font-black leading-none tracking-tighter">
                   {String(i + 1).padStart(2, "0")}
                 </span>
                 <p className="mt-2 font-sans text-sm font-bold leading-snug">{step}</p>

@@ -1,4 +1,4 @@
-import { AnimatePresence, animate, motion } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { Section } from "@/components/Section";
@@ -15,52 +15,9 @@ import {
 } from "./toneCurve";
 import type {
   ColorGradeResponse,
-  FujifilmRecipe,
-  FujifilmRecipeSettings,
   GradingAdjustments,
   Histogram,
 } from "@/types/analysis";
-
-function clampValue(v: number, min: number, max: number): number {
-  return Math.min(max, Math.max(min, v));
-}
-
-// The recipe's tone/color/sharpness fields are exiftool's human-readable
-// strings straight off the camera, e.g. "+2 (hard)" or "-1 (medium soft)" —
-// every one of Fuji's tone dials leads with the signed step count, so pulling
-// that back out is what the slider math below needs.
-function leadingSignedNumber(value: string | null): number | null {
-  if (!value) return null;
-  const match = value.match(/^[+-]?\d+/);
-  return match ? Number(match[0]) : null;
-}
-
-// Fujifilm's in-camera tone/color/sharpness dials don't line up 1:1 with
-// these sliders, so each is rescaled from its typical camera-menu range
-// onto the slider's own range rather than copied verbatim.
-function fujifilmRecipeToAdjustments(
-  settings: FujifilmRecipeSettings,
-): Partial<GradingAdjustments> {
-  const next: Partial<GradingAdjustments> = {};
-  const highlights = leadingSignedNumber(settings.highlights);
-  const shadows = leadingSignedNumber(settings.shadows);
-  const color = leadingSignedNumber(settings.color);
-  const sharpness = leadingSignedNumber(settings.sharpness);
-  if (highlights !== null) {
-    next.highlights = clampValue(highlights * 25, -100, 100);
-  }
-  if (shadows !== null) {
-    next.shadows = clampValue(shadows * 25, -100, 100);
-  }
-  if (color !== null) {
-    next.saturation = clampValue(color * 25, -100, 100);
-  }
-  if (sharpness !== null) {
-    next.sharpness = clampValue(((sharpness + 4) / 8) * 100, 0, 100);
-  }
-  // noise_reduction has no slider equivalent — skipped.
-  return next;
-}
 
 const COMPARE_MODES: { key: CompareMode; label: string; mobileHidden?: boolean }[] = [
   { key: "before", label: "Before" },
@@ -68,9 +25,24 @@ const COMPARE_MODES: { key: CompareMode; label: string; mobileHidden?: boolean }
   { key: "after", label: "After" },
 ];
 
-const ACTIVE_COMPARE_CLASS = "bg-[#0a0a0a] px-4 py-2 font-mono text-xs uppercase tracking-widest text-white";
-const INACTIVE_COMPARE_CLASS =
-  "border border-border px-4 py-2 font-mono text-xs uppercase tracking-widest text-muted transition-colors hover:border-border-strong hover:text-[#999999]";
+// Every button on this page is the same object: thick black border, hard
+// offset shadow, heavy uppercase label. Pressing it moves the box into its own
+// shadow rather than tinting it — the shadow is the affordance.
+const BTN_BASE =
+  "border-4 border-black font-sans font-black uppercase tracking-widest text-black " +
+  "shadow-[4px_4px_0_0_#000] transition-transform " +
+  "hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-[2px_2px_0_0_#000] " +
+  "active:translate-x-[4px] active:translate-y-[4px] active:shadow-none " +
+  "disabled:opacity-50 disabled:hover:translate-x-0 disabled:hover:translate-y-0 " +
+  "disabled:hover:shadow-[4px_4px_0_0_#000]";
+const BTN_WHITE = `${BTN_BASE} bg-white`;
+const BTN_YELLOW = `${BTN_BASE} bg-yellow-400`;
+const BTN_RED = `${BTN_BASE} bg-red-500 text-white`;
+
+// Active compare mode is a stark fill, not a black slab, so which view you are
+// looking at is legible at a glance from across the panel.
+const ACTIVE_COMPARE_CLASS = `${BTN_YELLOW} px-4 py-2 text-xs`;
+const INACTIVE_COMPARE_CLASS = `${BTN_WHITE} px-4 py-2 text-xs`;
 
 function clamp01(v: number): number {
   return Math.min(0.98, Math.max(0.02, v));
@@ -82,8 +54,6 @@ interface SliderConfig {
   min: number;
   max: number;
   step: number;
-  /** CSS gradient painted on the track, hinting at what the slider does. */
-  gradient: string;
 }
 
 const TONE_SLIDERS: SliderConfig[] = [
@@ -93,7 +63,6 @@ const TONE_SLIDERS: SliderConfig[] = [
     min: -2,
     max: 2,
     step: 0.1,
-    gradient: "linear-gradient(to right, #1a1a1a, #ffffff)",
   },
   {
     key: "contrast",
@@ -101,7 +70,6 @@ const TONE_SLIDERS: SliderConfig[] = [
     min: -100,
     max: 100,
     step: 1,
-    gradient: "linear-gradient(to right, #666666, #ffffff 50%, #000000)",
   },
   {
     key: "highlights",
@@ -109,7 +77,6 @@ const TONE_SLIDERS: SliderConfig[] = [
     min: -100,
     max: 100,
     step: 1,
-    gradient: "linear-gradient(to right, #555555, #ffffff)",
   },
   {
     key: "shadows",
@@ -117,7 +84,6 @@ const TONE_SLIDERS: SliderConfig[] = [
     min: -100,
     max: 100,
     step: 1,
-    gradient: "linear-gradient(to right, #000000, #888888)",
   },
   {
     key: "whites",
@@ -125,7 +91,6 @@ const TONE_SLIDERS: SliderConfig[] = [
     min: -100,
     max: 100,
     step: 1,
-    gradient: "linear-gradient(to right, #aaaaaa, #ffffff)",
   },
   {
     key: "blacks",
@@ -133,7 +98,6 @@ const TONE_SLIDERS: SliderConfig[] = [
     min: -100,
     max: 100,
     step: 1,
-    gradient: "linear-gradient(to right, #000000, #444444)",
   },
 ];
 
@@ -144,7 +108,6 @@ const COLOR_SLIDERS: SliderConfig[] = [
     min: -100,
     max: 100,
     step: 1,
-    gradient: "linear-gradient(to right, #4a90d9, #ffffff, #f5a623)",
   },
   {
     key: "tint",
@@ -152,7 +115,6 @@ const COLOR_SLIDERS: SliderConfig[] = [
     min: -100,
     max: 100,
     step: 1,
-    gradient: "linear-gradient(to right, #2ecc71, #ffffff, #e91e8c)",
   },
   {
     key: "saturation",
@@ -160,7 +122,6 @@ const COLOR_SLIDERS: SliderConfig[] = [
     min: -100,
     max: 100,
     step: 1,
-    gradient: "linear-gradient(to right, #888888, #e63b2e)",
   },
   {
     key: "vibrance",
@@ -168,7 +129,6 @@ const COLOR_SLIDERS: SliderConfig[] = [
     min: -100,
     max: 100,
     step: 1,
-    gradient: "linear-gradient(to right, #888888, #e63b2e)",
   },
 ];
 
@@ -179,13 +139,42 @@ const DETAIL_SLIDERS: SliderConfig[] = [
     min: 0,
     max: 100,
     step: 1,
-    gradient: "linear-gradient(to right, #dddddd, #0a0a0a)",
+  },
+  {
+    key: "noise_reduction",
+    label: "Noise Reduction",
+    min: 0,
+    max: 100,
+    step: 1,
+  },
+  {
+    key: "clarity",
+    label: "Clarity",
+    min: -100,
+    max: 100,
+    step: 1,
+  },
+];
+
+const EFFECTS_SLIDERS: SliderConfig[] = [
+  {
+    key: "vignette",
+    label: "Vignette",
+    min: -100,
+    max: 100,
+    step: 1,
+  },
+  {
+    key: "grain",
+    label: "Grain",
+    min: 0,
+    max: 100,
+    step: 1,
   },
 ];
 
 interface EditPageProps {
   file: File;
-  recipe: FujifilmRecipe | null;
   histogram: Histogram | null;
   colorGrade: ColorGradeResponse | null;
   colorGradeStatus: "idle" | "loading" | "success" | "error";
@@ -196,7 +185,6 @@ interface EditPageProps {
 
 export function EditPage({
   file,
-  recipe,
   histogram,
   colorGrade,
   colorGradeStatus,
@@ -301,24 +289,6 @@ export function EditPage({
   const setField = (key: keyof GradingAdjustments, value: number) =>
     setAdjustments((prev) => ({ ...prev, [key]: value }));
 
-  const applyFujifilmRecipe = () => {
-    if (!recipe?.settings) return;
-    const targets = fujifilmRecipeToAdjustments(recipe.settings);
-    (Object.entries(targets) as [keyof GradingAdjustments, number | undefined][]).forEach(
-      ([key, target]) => {
-        if (target === undefined) return;
-        // Spring the slider to its new position instead of snapping, so the
-        // whole panel visibly "moves" when the recipe is applied.
-        animate(adjustments[key], target, {
-          type: "spring",
-          stiffness: 180,
-          damping: 26,
-          onUpdate: (v) => setField(key, v),
-        });
-      },
-    );
-  };
-
   const handleDownload = async () => {
     setExporting(true);
     try {
@@ -347,28 +317,32 @@ export function EditPage({
         min={s.min}
         max={s.max}
         step={s.step}
-        trackGradient={s.gradient}
         onChange={(v) => setField(s.key, v)}
       />
     ));
 
   return (
     <motion.div
-      initial={{ opacity: 0, x: 40 }}
-      animate={{ opacity: 1, x: 0 }}
-      exit={{ opacity: 0, x: -40 }}
-      transition={{ type: "spring", stiffness: 120, damping: 24 }}
-      className="space-y-8 py-16"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.12, ease: "easeOut" }}
+      className="theme-comic relative left-1/2 w-screen -translate-x-1/2 bg-bg py-16"
     >
-      <button
-        onClick={onBack}
-        className="border border-border px-6 py-3 font-mono text-xs uppercase tracking-widest text-muted transition-colors hover:border-border-strong hover:text-[#999999]"
-      >
+      {/* Full-bleed so the cream ground reaches the window edge exactly as it
+          does on the results report, then the reading width is re-established
+          inside — same structure as ResultsView. `theme-comic` is what remaps
+          --color-bg to the vintage cream and --color-border to black. */}
+      <div className="mx-auto max-w-5xl space-y-8 px-6">
+      <button onClick={onBack} className={`${BTN_WHITE} px-6 py-3 text-xs`}>
         ← Back
       </button>
 
       <div className="grid gap-10 lg:grid-cols-2">
-        <div className="flex flex-col items-start gap-4">
+        {/* Sticky on wide screens: the control stack runs far taller than the
+            photo, so pinning the image keeps it in view while you work the
+            sliders instead of leaving a column of dead cream beside them.
+            self-start is required — a stretched grid item can't stick. */}
+        <div className="flex flex-col items-start gap-4 lg:sticky lg:top-8 lg:self-start">
           <div className="flex flex-wrap items-center gap-3">
             <div className="flex items-center gap-1.5">
               {COMPARE_MODES.map(({ key, label, mobileHidden }) => (
@@ -381,12 +355,18 @@ export function EditPage({
                 </button>
               ))}
             </div>
-            <span className="font-mono text-[10px] uppercase tracking-widest text-subtle">
+            <span className="font-mono text-[10px] font-black uppercase tracking-widest text-black">
               hold \ for before
             </span>
           </div>
 
-          <div ref={splitContainerRef} className="relative inline-block max-w-full overflow-hidden">
+          {/* The photograph gets the same heavy mount as the results page:
+              w-fit so the frame tracks the image's real aspect rather than
+              boxing a portrait crop inside a landscape card. */}
+          <div
+            ref={splitContainerRef}
+            className="relative inline-block w-fit max-w-full overflow-hidden border-4 border-black bg-white shadow-[12px_12px_0_0_#000]"
+          >
             <EditCanvas
               ref={canvasRef}
               file={file}
@@ -413,7 +393,7 @@ export function EditPage({
             <button
               onClick={handleDownload}
               disabled={exporting}
-              className="bg-accent px-10 py-4 font-mono text-xs uppercase tracking-widest text-bg transition-colors hover:bg-[#2a2a2a] disabled:opacity-50"
+              className={`${BTN_RED} px-10 py-4 text-xs`}
             >
               {exporting ? "Exporting…" : "Download"}
             </button>
@@ -421,47 +401,43 @@ export function EditPage({
         </div>
 
         <div>
-          <Section number="01" title="TONE">
-            {renderSliderGroup(TONE_SLIDERS)}
-            <ErrorBoundary label="Tone curve">
-              <ToneCurveEditor curve={curve} onChange={setCurve} histogram={histogram} />
-            </ErrorBoundary>
+          <Section title="TONE">
+            <div className="mb-8 border-4 border-black bg-white p-6 shadow-[8px_8px_0_0_#000]">
+              {renderSliderGroup(TONE_SLIDERS)}
+              <ErrorBoundary label="Tone curve">
+                <ToneCurveEditor curve={curve} onChange={setCurve} histogram={histogram} />
+              </ErrorBoundary>
+            </div>
           </Section>
-          <Section number="02" title="COLOR">
-            {renderSliderGroup(COLOR_SLIDERS)}
+          <Section title="COLOR">
+            <div className="mb-8 border-4 border-black bg-white p-6 shadow-[8px_8px_0_0_#000]">{renderSliderGroup(COLOR_SLIDERS)}</div>
           </Section>
-          <Section number="03" title="DETAIL">
-            {renderSliderGroup(DETAIL_SLIDERS)}
+          <Section title="DETAIL">
+            <div className="mb-8 border-4 border-black bg-white p-6 shadow-[8px_8px_0_0_#000]">{renderSliderGroup(DETAIL_SLIDERS)}</div>
+          </Section>
+          <Section title="EFFECTS">
+            <div className="mb-8 border-4 border-black bg-white p-6 shadow-[8px_8px_0_0_#000]">{renderSliderGroup(EFFECTS_SLIDERS)}</div>
           </Section>
 
-          {recipe?.applicable && recipe.settings && (
-            <button
-              onClick={applyFujifilmRecipe}
-              className="w-full bg-[#0a0a0a] px-4 py-3 font-mono text-xs uppercase tracking-widest text-white transition-colors hover:bg-[#2a2a2a]"
-            >
-              Apply {recipe.film_simulation ?? "Fujifilm"} Recipe
-            </button>
-          )}
-
-          <div className="mt-8 space-y-4 border-t border-border pt-6">
+          <div className="mt-8 space-y-4 border-4 border-black bg-white p-6 shadow-[8px_8px_0_0_#000]">
             {!wantsAiSuggestion ? null : colorGradeStatus === "loading" ? (
-              <p className="font-mono text-xs uppercase tracking-widest text-muted">
+              <p className="font-mono text-xs font-black uppercase tracking-widest text-black">
                 Generating suggestion…
               </p>
             ) : colorGradeStatus === "error" ? (
-              <p className="font-mono text-sm text-red-400">
+              <p className="border-4 border-black bg-red-500 px-4 py-3 font-mono text-sm font-bold text-white shadow-[4px_4px_0_0_#000]">
                 {colorGradeError ?? "Color grading failed."}
               </p>
             ) : colorGrade && !colorGrade.available ? (
-              <p className="text-sm text-muted">
+              <p className="text-sm font-bold text-black">
                 {colorGrade.reason ?? "AI suggestions are unavailable."}
               </p>
             ) : colorGrade?.reasoning ? (
               <div>
-                <p className="mb-1 font-mono text-xs uppercase tracking-widest text-muted">
+                <p className="mb-2 inline-block border-4 border-black bg-yellow-400 px-3 py-1 font-mono text-xs font-black uppercase tracking-widest text-black shadow-[4px_4px_0_0_#000]">
                   AI suggestion
                 </p>
-                <p className="text-sm text-muted">{colorGrade.reasoning}</p>
+                <p className="text-sm font-bold text-black">{colorGrade.reasoning}</p>
               </div>
             ) : null}
 
@@ -472,7 +448,7 @@ export function EditPage({
                   (wantsAiSuggestion && colorGradeStatus === "loading") ||
                   (colorGrade !== null && !colorGrade.available)
                 }
-                className="bg-accent px-6 py-3 font-mono text-xs uppercase tracking-widest text-bg transition-colors hover:bg-[#2a2a2a] disabled:opacity-50"
+                className={`${BTN_YELLOW} px-6 py-3 text-xs`}
               >
                 {wantsAiSuggestion && colorGradeStatus === "loading"
                   ? "Applying AI Suggestion…"
@@ -484,7 +460,7 @@ export function EditPage({
                   setCurve(IDENTITY_CURVE);
                   confirmReset();
                 }}
-                className="border border-border px-6 py-3 font-mono text-xs uppercase tracking-widest text-muted transition-colors hover:border-border-strong hover:text-[#999999]"
+                className={`${BTN_WHITE} px-6 py-3 text-xs`}
               >
                 Reset to original
               </button>
@@ -496,7 +472,7 @@ export function EditPage({
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
                     transition={{ duration: 0.25 }}
-                    className="font-mono text-xs text-muted"
+                    className="font-mono text-xs font-black uppercase tracking-widest text-black"
                   >
                     ✓ Reset
                   </motion.span>
@@ -505,6 +481,7 @@ export function EditPage({
             </div>
           </div>
         </div>
+      </div>
       </div>
     </motion.div>
   );

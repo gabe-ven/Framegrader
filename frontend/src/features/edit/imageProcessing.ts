@@ -165,10 +165,108 @@ function applySharpness(imageData: ImageData, sharpness: number): void {
   }
 }
 
+/** The inverse of sharpness: blend toward the blur instead of away from it. */
+function applyNoiseReduction(imageData: ImageData, noiseReduction: number): void {
+  if (noiseReduction <= 0) return;
+  const { width, height, data } = imageData;
+  const amount = clamp01(noiseReduction / 100);
+  const blurred = boxBlur3x3(data, width, height);
+
+  for (let i = 0; i < data.length; i += 4) {
+    for (let c = 0; c < 3; c++) {
+      const idx = i + c;
+      data[idx] = data[idx] + (blurred[idx] - data[idx]) * amount;
+    }
+  }
+}
+
 /**
- * Runs the full pipeline on a fresh copy of `source`, in order:
- * tonal adjustments -> tone curve (if any) -> sharpness. The tone curve is an
- * optional per-channel LUT layered on top of the slider adjustments.
+ * Local (midtone) contrast — an unsharp mask at a much larger radius than
+ * Sharpness, so it enhances "structure" rather than fine edges. Three passes
+ * of the cheap 3x3 box blur approximate a much larger, smoother blur without
+ * the cost of a single big-kernel pass. Weighted toward midtones so it can't
+ * crush shadows or blow out highlights the way a naive unsharp mask would;
+ * supports negative values (flatten/soften local contrast).
+ */
+function applyClarity(imageData: ImageData, clarity: number): void {
+  if (clarity === 0) return;
+  const { width, height, data } = imageData;
+  const amount = (clarity / 100) * 1.2;
+  let blurred = boxBlur3x3(data, width, height);
+  blurred = boxBlur3x3(blurred, width, height);
+  blurred = boxBlur3x3(blurred, width, height);
+
+  for (let i = 0; i < data.length; i += 4) {
+    const l = luminance(data[i], data[i + 1], data[i + 2]);
+    const midtoneWeight = clamp01(1 - Math.pow(Math.abs(l - 128) / 128, 2));
+    const localAmount = amount * midtoneWeight;
+    for (let c = 0; c < 3; c++) {
+      const idx = i + c;
+      data[idx] = data[idx] + (data[idx] - blurred[idx]) * localAmount;
+    }
+  }
+}
+
+/** Deterministic pseudo-random value in [-1, 1] from an integer seed — the
+ * same pixel always gets the same grain value, so the texture stays put as
+ * unrelated sliders trigger a re-render, instead of "boiling" every frame. */
+function hashNoise(seed: number): number {
+  const x = Math.sin(seed) * 43758.5453;
+  return (x - Math.floor(x)) * 2 - 1;
+}
+
+/** Monochromatic film-style grain — the same noise value on all three
+ * channels per pixel, matching how real grain reads as luminance texture
+ * rather than color speckling. */
+function applyGrain(imageData: ImageData, grain: number): void {
+  if (grain <= 0) return;
+  const { width, height, data } = imageData;
+  const amount = (grain / 100) * 30;
+
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const i = (y * width + x) * 4;
+      const n = hashNoise(x * 12.9898 + y * 78.233) * amount;
+      data[i] += n;
+      data[i + 1] += n;
+      data[i + 2] += n;
+    }
+  }
+}
+
+/** Radial brightness falloff from center. Positive darkens the corners
+ * (classic vignette); negative lightens them instead. The center third of
+ * the frame's radius is always left untouched. */
+function applyVignette(imageData: ImageData, vignette: number): void {
+  if (vignette === 0) return;
+  const { width, height, data } = imageData;
+  const cx = width / 2;
+  const cy = height / 2;
+  const maxDist = Math.sqrt(cx * cx + cy * cy);
+  const amount = vignette / 100;
+
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const dx = x - cx;
+      const dy = y - cy;
+      const dist = Math.sqrt(dx * dx + dy * dy) / maxDist;
+      const falloff = clamp01((dist - 0.3) / 0.7);
+      const factor = 1 - falloff * falloff * amount;
+      const i = (y * width + x) * 4;
+      data[i] *= factor;
+      data[i + 1] *= factor;
+      data[i + 2] *= factor;
+    }
+  }
+}
+
+/**
+ * Runs the full pipeline on a fresh copy of `source`, in order: tonal
+ * adjustments -> tone curve (if any) -> noise reduction -> clarity ->
+ * sharpness -> grain -> vignette. Noise reduction runs before the two
+ * detail passes so sharpening doesn't re-amplify noise just smoothed away;
+ * grain and vignette run last since they're finishing effects layered on
+ * top of the fully detailed image, not tonal or detail work themselves.
  */
 export function processImageData(
   source: ImageData,
@@ -179,6 +277,10 @@ export function processImageData(
   applyTonalAdjustments(data, adjustments);
   if (curveLut) applyCurveLUT(data, curveLut);
   const result = new ImageData(data, source.width, source.height);
+  applyNoiseReduction(result, adjustments.noise_reduction);
+  applyClarity(result, adjustments.clarity);
   applySharpness(result, adjustments.sharpness);
+  applyGrain(result, adjustments.grain);
+  applyVignette(result, adjustments.vignette);
   return result;
 }
