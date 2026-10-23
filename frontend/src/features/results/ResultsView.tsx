@@ -1,4 +1,5 @@
 import { motion } from "framer-motion";
+import type { ReactNode } from "react";
 import type { AIAnalysis, AnalysisResponse } from "@/types/analysis";
 import { CritiqueSection } from "./CritiqueSection";
 import { MeasurementsSection } from "./MeasurementsSection";
@@ -7,7 +8,7 @@ import { PhotographSection } from "./PhotographSection";
 type Status = "idle" | "loading" | "success" | "error";
 
 interface ResultsViewProps {
-  file: File;
+  fileName: string;
   previewUrl: string | null;
   status: Status;
   error: string | null;
@@ -17,11 +18,13 @@ interface ResultsViewProps {
   ai: AIAnalysis | null;
   onChooseAnother: () => void;
   onEditPhoto: () => void;
+  /** Rendered above the photograph: share controls, shared-link banner. */
+  toolbar?: ReactNode;
 }
 
 /** Orchestrates the results report — this is where section order lives. */
 export function ResultsView({
-  file,
+  fileName,
   previewUrl,
   status,
   error,
@@ -31,6 +34,7 @@ export function ResultsView({
   ai,
   onChooseAnother,
   onEditPhoto,
+  toolbar,
 }: ResultsViewProps) {
   return (
     <motion.div
@@ -44,8 +48,9 @@ export function ResultsView({
           background edge-to-edge, not to let the report's own content
           stretch past its normal width. */}
       <div className="mx-auto max-w-5xl space-y-16 px-6">
+        {toolbar}
         <PhotographSection
-          file={file}
+          fileName={fileName}
           previewUrl={previewUrl}
           exif={result?.exif ?? null}
           composition={result?.composition ?? null}
@@ -72,6 +77,7 @@ export function ResultsView({
             vision={result?.vision ?? null}
             composition={result?.composition ?? null}
             semantic={ai?.semantic_composition ?? null}
+            scores={result?.scores ?? null}
             imageUrl={previewUrl}
             loading={status === "loading"}
             error={status === "error" ? error : null}

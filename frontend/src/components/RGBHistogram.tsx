@@ -126,7 +126,7 @@ export function RGBHistogram({ histogram }: { histogram: Histogram }) {
             type="button"
             onClick={() => setVisible((v) => ({ ...v, [c]: !v[c] }))}
             aria-pressed={visible[c]}
-            className="mr-4 font-mono text-xs font-black uppercase tracking-widest"
+            className="mr-4 font-mono text-xs font-black uppercase tracking-widest pointer-coarse:min-h-11 pointer-coarse:min-w-11"
             style={{ color: visible[c] ? CHANNEL_STYLES[c].stroke : "#999999" }}
           >
             <span style={{ color: visible[c] ? CHANNEL_STYLES[c].stroke : "#999999" }}>

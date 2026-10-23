@@ -72,3 +72,19 @@ def test_describe_image_reports_corrected_dimensions() -> None:
     assert info["width"] == 300
     assert info["height"] == 400
     assert info["format"] == "JPEG"
+
+
+def test_decompression_bomb_is_a_validation_error_not_a_500(monkeypatch) -> None:
+    # Shrink Pillow's limit rather than building a 400MP image in the test.
+    import io as _io
+
+    import pytest as _pytest
+    from PIL import Image as _Image
+
+    from app.services import image_io as _image_io
+
+    monkeypatch.setattr(_Image, "MAX_IMAGE_PIXELS", 100)
+    buf = _io.BytesIO()
+    _Image.new("RGB", (64, 64)).save(buf, format="PNG")  # 4096px > 2x limit
+    with _pytest.raises(_image_io.ImageValidationError, match="too large"):
+        _image_io.open_image(buf.getvalue())

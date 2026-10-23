@@ -13,8 +13,10 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
-      // Proxy API calls to the FastAPI backend during development.
-      "/api": "http://localhost:8000",
+      // Proxy API calls to the FastAPI backend during development (and in
+      // `vite preview`, which inherits this). The E2E suite points it at its
+      // own backend port via VITE_API_PROXY.
+      "/api": process.env.VITE_API_PROXY ?? "http://localhost:8000",
     },
   },
 });

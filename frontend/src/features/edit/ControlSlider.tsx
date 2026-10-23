@@ -43,13 +43,20 @@ export function ControlSlider({
       </div>
       <input
         type="range"
+        aria-label={label}
         min={min}
         max={max}
         step={step}
         value={value}
         onChange={(e) => onChange(Number(e.target.value))}
         onDoubleClick={() => onChange(aiValue)}
-        className="control-slider cursor-pointer"
+        // scroll-mt below lg: the editor pins the photo as a sticky header
+        // there, and scroll-into-view (keyboard focus moving to a slider)
+        // ignores sticky headers, so a focused slider landed underneath it.
+        // The margin is the header (32vh of photo + ~7rem of tabs/padding)
+        // plus this row's label (~2.5rem), and sits on the input because
+        // that is the element focus scrolls to.
+        className="control-slider cursor-pointer max-lg:scroll-mt-[calc(32vh+9.5rem)]"
       />
     </div>
   );

@@ -38,6 +38,48 @@ class Settings(BaseSettings):
     # discarded. DEBUG is very chatty — ultralytics and PIL are capped at
     # WARNING regardless so the app's own records stay readable.
     log_level: str = "INFO"
+    # "json" (one object per line, for log collectors) or "text" (human
+    # readable, for a terminal). Both carry request_id/job_id/analysis_id and
+    # per-stage timings; see app/core/logging.py.
+    log_format: str = "text"
+
+    # --- Persistence + background jobs (app/db, app/jobs) -------------------
+    # SQLAlchemy URL. SQLite is the zero-setup default and is correct for a
+    # single instance; point this at Postgres (postgresql+psycopg://...) for
+    # durable history across redeploys or for more than one replica — the job
+    # queue claims work with FOR UPDATE SKIP LOCKED there, so any number of
+    # workers can share it. A bare postgres:// URL (what Render and Heroku
+    # hand out) is accepted and normalised.
+    database_url: str = "sqlite:///./data/framegrader.db"
+    # Worker threads started inside the API process. 1 suits a 512MB instance:
+    # each running job holds one decoded photo. Set 0 to run workers as a
+    # separate process instead (`python -m app.worker`).
+    embedded_workers: int = 1
+    # A running job whose heartbeat is older than this is presumed dead (its
+    # process was killed mid-job) and is requeued, up to max attempts.
+    job_stale_seconds: int = 180
+    job_max_attempts: int = 2
+    # Analyses (and their stored images) older than this are deleted. 0 keeps
+    # them forever.
+    retention_days: int = 30
+    # Signs the short-lived image URLs handed to the browser (an <img> tag
+    # cannot send the X-Client-Id header). Unset = a random per-process key:
+    # fine for one instance, but replicas must share one or links minted by
+    # one replica 403 on another.
+    secret_key: str = ""
+    # Long edge of the stored copy of each photo. This is what the results
+    # page, shared links and the editor (when the original File is no longer
+    # in the browser) work from. EXIF is not carried over, so GPS never leaks
+    # through a shared link.
+    stored_image_max_edge: int = 2048
+
+    # --- Learned aesthetic score (app/services/scoring/aesthetic.py) ---------
+    # ONNX model + its .json sidecar, produced by eval/benchmark/export_onnx.py
+    # and baked into the image at build time. Missing file = feature off; the
+    # composition score then uses its geometry-only calibrated model.
+    aesthetic_enabled: bool = True
+    aesthetic_model_path: str = "models/aesthetic.onnx"
+    aesthetic_threads: int = 2
     # Hard ceiling on the pixel count an analysis works with. The upload limit
     # is in bytes, which says nothing about resolution — a 3MB JPEG can decode
     # to 100MP — so this is what actually bounds peak memory. Every metric
@@ -64,6 +106,18 @@ class Settings(BaseSettings):
     @property
     def max_upload_bytes(self) -> int:
         return self.max_upload_mb * 1024 * 1024
+
+    @property
+    def sqlalchemy_url(self) -> str:
+        # Blank means unset: a dashboard prompt left empty (render.yaml's
+        # `sync: false`) arrives as "", which would otherwise crash startup.
+        url = self.database_url.strip() or "sqlite:///./data/framegrader.db"
+        # Managed Postgres hosts hand out postgres:// (or postgresql://), which
+        # SQLAlchemy maps to psycopg2 — not installed. Route it to psycopg 3.
+        for prefix in ("postgres://", "postgresql://"):
+            if url.startswith(prefix):
+                return "postgresql+psycopg://" + url[len(prefix):]
+        return url
 
 
 @lru_cache

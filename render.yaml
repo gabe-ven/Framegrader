@@ -51,6 +51,25 @@ services:
 
       - key: LOG_LEVEL
         value: "INFO"
+      # One JSON object per line: Render's log search can then filter on
+      # request_id / job_id / stage / duration_ms instead of grepping text.
+      - key: LOG_FORMAT
+        value: "json"
+
+      # Background jobs run inside this process (the free plan has no
+      # background workers). One thread: each running job holds a decoded photo.
+      - key: EMBEDDED_WORKERS
+        value: "1"
+      # Signs image URLs for private analyses. Generated once by Render and
+      # stable across deploys, so links handed out before a deploy keep working.
+      - key: SECRET_KEY
+        generateValue: true
+      # Optional but recommended: without it, history and share links live in
+      # SQLite on the instance's ephemeral disk and are wiped on every deploy.
+      # Paste a Postgres connection string (Render Postgres, Neon, Supabase…);
+      # postgres:// URLs are accepted as-is.
+      - key: DATABASE_URL
+        sync: false
       - key: MAX_UPLOAD_MB
         value: "25"
       - key: AI_RATE_LIMIT

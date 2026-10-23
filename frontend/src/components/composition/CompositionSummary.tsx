@@ -1,4 +1,4 @@
-import type { CompositionInfo, SemanticComposition } from "@/types/analysis";
+import type { CompositionInfo, Scores, SemanticComposition } from "@/types/analysis";
 import {
   applySemanticToProfile,
   buildCompositionProfile,
@@ -12,19 +12,29 @@ import {
  * editorial style as the AI Critique masthead. No chart library, no chrome —
  * every number here is derived straight from CompositionInfo via the shared
  * composition profile.
+ *
+ * The headline number is the server's score when it has one: a model fitted to
+ * expert composition ratings (CADB), not a hand-picked average. The
+ * hand-weighted mean is still computed here as the fallback for analyses
+ * stored before scoring shipped. Strongest/Weakest stay per-axis either way.
  */
 export function CompositionSummary({
   composition,
   semantic,
+  scores,
 }: {
   composition: CompositionInfo;
   semantic?: SemanticComposition | null;
+  scores?: Scores | null;
 }) {
   const profile = applySemanticToProfile(
     buildCompositionProfile(composition),
     semantic,
   );
-  const score = overallScore(profile);
+  const calibrated = scores?.composition.score;
+  const isCalibrated = calibrated != null && scores?.composition.method !== "heuristic-mean";
+  const score = Math.round(calibrated ?? overallScore(profile));
+  const aesthetic = scores?.aesthetic?.score;
 
   const applicable = profile.filter((p) => p.applicable);
   const sorted = [...applicable].sort((a, b) => b.value - a.value);
@@ -52,6 +62,17 @@ export function CompositionSummary({
         <span className="mt-4 inline-block w-fit border-4 border-black bg-yellow-400 px-2 py-1 font-mono text-xs font-black uppercase tracking-widest text-black">
           {band}
         </span>
+        <span
+          className="mt-3 font-mono text-[10px] font-bold uppercase tracking-widest text-subtle"
+          title={isCalibrated ? scores?.composition.method : "Mean of the applicable axes"}
+        >
+          {isCalibrated ? "Calibrated to expert ratings" : "Average of measured axes"}
+        </span>
+        {aesthetic != null && (
+          <span className="mt-1 font-mono text-[10px] font-bold uppercase tracking-widest text-subtle">
+            Aesthetic model: {Math.round(aesthetic)}/100
+          </span>
+        )}
       </div>
 
       <div className="p-6">

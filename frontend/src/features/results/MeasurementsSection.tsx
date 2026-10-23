@@ -11,12 +11,13 @@ import { RGBHistogram } from "@/components/RGBHistogram";
 import { Section } from "@/components/Section";
 import { ShimmerOverlay } from "@/components/Shimmer";
 import { sectionMount } from "@/lib/motionVariants";
-import type { CompositionInfo, SemanticComposition, VisionInfo } from "@/types/analysis";
+import type { CompositionInfo, Scores, SemanticComposition, VisionInfo } from "@/types/analysis";
 
 interface MeasurementsSectionProps {
   vision: VisionInfo | null;
   composition: CompositionInfo | null;
   semantic: SemanticComposition | null;
+  scores?: Scores | null;
   imageUrl: string | null;
   loading?: boolean;
   error?: string | null;
@@ -27,6 +28,7 @@ export function MeasurementsSection({
   vision,
   composition,
   semantic,
+  scores = null,
   imageUrl,
   loading = false,
   error = null,
@@ -46,7 +48,12 @@ export function MeasurementsSection({
             Run the analysis to compute brightness, contrast, composition scores, and more.
           </p>
         ) : (
-          <MeasurementsContent vision={vision} composition={composition} semantic={semantic} />
+          <MeasurementsContent
+            vision={vision}
+            composition={composition}
+            semantic={semantic}
+            scores={scores}
+          />
         )}
       </Section>
     </motion.div>
@@ -57,10 +64,12 @@ function MeasurementsContent({
   vision,
   composition,
   semantic,
+  scores,
 }: {
   vision: VisionInfo;
   composition: CompositionInfo;
   semantic: SemanticComposition | null;
+  scores: Scores | null;
 }) {
   const visionItems: DataStripItem[] = [
     {
@@ -128,7 +137,7 @@ function MeasurementsContent({
     <div className="space-y-8">
       <DataStrip items={statsItems} />
 
-      <CompositionSummary composition={composition} semantic={semantic} />
+      <CompositionSummary composition={composition} semantic={semantic} scores={scores} />
 
       <DominantColors colors={vision.dominant_colors} />
 

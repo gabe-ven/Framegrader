@@ -95,3 +95,20 @@ def test_ensure_predictor_survives_a_failing_model(_reset_predictor_state) -> No
 def test_warm_up_is_a_noop_when_the_model_cannot_load(monkeypatch) -> None:
     monkeypatch.setattr(YOLOWorldSubjectLocator, "_get_model", classmethod(lambda cls: None))
     YOLOWorldSubjectLocator.warm_up()  # must not raise
+
+
+def test_clip_imports_wherever_the_detector_tier_is_installed() -> None:
+    """The detector tier must not die silently on a packaging change.
+
+    CLIP imports pkg_resources; setuptools 81+ removed it, and with 82 pinned
+    in the lock YOLO-World quietly fell back to the VLM/saliency tiers in every
+    environment built from it. Skipped on the lite build, which has no
+    detector tier at all.
+    """
+    import importlib.util
+
+    import pytest
+
+    if importlib.util.find_spec("ultralytics") is None:
+        pytest.skip("lite build: no detector tier")
+    import clip  # noqa: F401

@@ -61,6 +61,32 @@ def read_display_dimensions(data: bytes) -> tuple[int, int] | None:
     return width, height
 
 
+# Pillow raises DecompressionBombError (an Exception, *not* an OSError) past
+# twice its MAX_IMAGE_PIXELS (~179MP). Uncaught it was a raw 500 — a 1.2MB PNG
+# that decodes to 400MP did exactly that.
+_BOMB_MESSAGE = "Image resolution is too large to analyze."
+
+
+def probe_image(data: bytes) -> str:
+    """Verify ``data`` is an intact image in an allowed format, without decoding.
+
+    Returns the format name. Cheap enough to run inside a request before
+    queueing a job, so a bad upload still gets an immediate 422 rather than a
+    job that fails a second later.
+    """
+    try:
+        with Image.open(io.BytesIO(data)) as probe:
+            fmt = probe.format
+            probe.verify()
+    except Image.DecompressionBombError as exc:
+        raise ImageValidationError(_BOMB_MESSAGE) from exc
+    except (UnidentifiedImageError, OSError, SyntaxError) as exc:
+        raise ImageValidationError("File is not a valid image.") from exc
+    if fmt not in ALLOWED_FORMATS:
+        raise ImageValidationError(f"Unsupported image format: {fmt}.")
+    return fmt
+
+
 def open_image(data: bytes, *, decode_max_edge: int | None = None) -> Image.Image:
     """Decode bytes into a PIL image, validating that it's a real image.
 
@@ -82,14 +108,11 @@ def open_image(data: bytes, *, decode_max_edge: int | None = None) -> Image.Imag
     traded for the memory. It is a no-op for formats without scaled decoding
     (PNG, WEBP, BMP), which is why downscale_to_megapixels still backstops it.
     """
+    probe_image(data)
     try:
-        Image.open(io.BytesIO(data)).verify()
-    except (UnidentifiedImageError, OSError) as exc:
-        raise ImageValidationError("File is not a valid image.") from exc
-
-    image = Image.open(io.BytesIO(data))
-    if image.format not in ALLOWED_FORMATS:
-        raise ImageValidationError(f"Unsupported image format: {image.format}.")
+        image = Image.open(io.BytesIO(data))
+    except Image.DecompressionBombError as exc:
+        raise ImageValidationError(_BOMB_MESSAGE) from exc
 
     original_format = image.format
     if decode_max_edge and decode_max_edge > 0:
@@ -152,3 +175,23 @@ def describe_image(
         "aspect_ratio": round(width / height, 2) if height else 0.0,
         "size_bytes": size_bytes,
     }
+
+
+def encode_jpeg(
+    image: Image.Image, max_edge: int, quality: int = 88
+) -> tuple[bytes, tuple[int, int]]:
+    """Downscale to ``max_edge`` and encode as JPEG, deliberately without EXIF.
+
+    Used for the stored copies behind history and share links. Dropping EXIF is
+    the privacy property that matters: a shared link must never carry the
+    photo's GPS coordinates.
+    """
+    width, height = image.size
+    scale = min(1.0, max_edge / float(max(width, height) or 1))
+    if scale < 1.0:
+        image = image.resize(
+            (max(1, round(width * scale)), max(1, round(height * scale))), Image.LANCZOS
+        )
+    buffer = io.BytesIO()
+    image.convert("RGB").save(buffer, format="JPEG", quality=quality, optimize=True)
+    return buffer.getvalue(), image.size

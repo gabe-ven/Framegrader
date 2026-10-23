@@ -1,0 +1,9 @@
+# Benchmark-only dependencies, installed ON TOP of the backend's full lock:
+#   pip install -r backend/requirements.lock -r eval/requirements.txt
+# pyiqa supplies the candidate learned aesthetic/quality models (NIMA, MUSIQ,
+# CLIP-IQA, LAION aesthetic, TOPIQ) and their pretrained weights; onnx is
+# for exporting the chosen one. None of this ships in the app image.
+pyiqa==0.1.16
+onnx==1.23.1
+onnxscript==0.7.2
+onnxruntime==1.30.0

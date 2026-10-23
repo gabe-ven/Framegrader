@@ -43,6 +43,12 @@ torch==2.6.0
 torchvision==0.21.0
 ultralytics==8.4.83
 clip @ git+https://github.com/ultralytics/CLIP.git
+# CLIP does `from pkg_resources import packaging` at import time, and setuptools
+# removed pkg_resources in 81. With 82 in the lock the import failed, the
+# detector tier silently fell back, and YOLO-World was dead in CI and in the
+# full image (Python 3.12+ venvs ship no setuptools of their own, so the lock's
+# pin is the only copy). tests/test_startup.py guards this.
+setuptools==80.9.0
 
 # VLM subject-localization escalation tier (backend/app/services/composition/
 # subject_localization.py: VLMSubjectLocator). Only used when
@@ -55,3 +61,11 @@ anthropic==0.115.0
 # auth, so an unthrottled caller can drain the API key. Storage defaults to
 # in-memory (per-process); pass a `storage_uri` to share buckets across workers.
 slowapi==0.1.10
+
+# Persistence + the background job queue (app/db, app/jobs). One SQL database
+# holds analyses, their stored images, and the job queue itself, so an
+# analysis and the job that fills it are written in one transaction. SQLite is
+# the zero-setup default; psycopg is the driver when DATABASE_URL points at
+# Postgres (the queue then claims jobs with FOR UPDATE SKIP LOCKED).
+sqlalchemy==2.0.54
+psycopg[binary]==3.2.13

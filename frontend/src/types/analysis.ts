@@ -214,12 +214,29 @@ export interface CompositionInfo {
   negative_space: NegativeSpace;
 }
 
+/** A 0-100 score plus how it was produced (backend app/schemas/analysis.py). */
+export interface ScoreInfo {
+  score: number | null;
+  /** e.g. "ridge-cadb-geometry+nima-v1" (fitted to human ratings) or
+   *  "heuristic-mean" (the hand-weighted average, used as a fallback). */
+  method: string;
+  model: string | null;
+  heuristic: number | null;
+}
+
+export interface Scores {
+  composition: ScoreInfo;
+  aesthetic: ScoreInfo | null;
+}
+
 export interface AnalysisResponse {
   image: ImageInfo;
   exif: ExifInfo;
   vision: VisionInfo;
   composition: CompositionInfo;
   recipe: FujifilmRecipe;
+  /** Absent on analyses stored before scoring shipped. */
+  scores?: Scores | null;
 }
 
 // --- Phase 3: AI analysis --------------------------------------------------
@@ -327,4 +344,67 @@ export interface ColorGradeResponse {
   reasoning: string | null;
   style: ColorGradeStyle | null;
   reason: string | null;
+}
+
+// --- Persisted analyses + background jobs (app/schemas/jobs.py) ------------
+
+export type JobStatus = "queued" | "running" | "succeeded" | "failed";
+export type StageStatus = "pending" | "running" | "done" | "skipped" | "failed";
+
+export interface StageView {
+  name: string;
+  label: string;
+  status: StageStatus;
+  duration_ms: number | null;
+}
+
+export interface JobView {
+  id: string;
+  kind: "analyze" | "color_grade";
+  status: JobStatus;
+  stage: string | null;
+  /** Weighted stage progress in [0, 1]. Moves only on real stage boundaries. */
+  progress: number;
+  stages: StageView[];
+  error: string | null;
+  queue_position: number | null;
+}
+
+export interface AnalysisSnapshot {
+  id: string;
+  filename: string;
+  status: JobStatus;
+  created_at: number;
+  is_public: boolean;
+  is_owner: boolean;
+  version: number;
+  image_url: string | null;
+  thumb_url: string | null;
+  measurements: AnalysisResponse | null;
+  ai: AIAnalysis | null;
+  color_grade: ColorGradeResponse | null;
+  jobs: Partial<Record<JobView["kind"], JobView>>;
+  error: string | null;
+}
+
+export interface CreatedAnalysis {
+  id: string;
+  job: JobView;
+  client_id: string | null;
+}
+
+export interface HistoryItem {
+  id: string;
+  filename: string;
+  status: JobStatus;
+  created_at: number;
+  is_public: boolean;
+  thumb_url: string | null;
+  scene_summary: string | null;
+  composition_score: number | null;
+}
+
+export interface HistoryPage {
+  items: HistoryItem[];
+  next_before: number | null;
 }
