@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState } from "react";
-import { createAnalysis, validateFile } from "@/lib/api";
+import { createAnalysis, validateFile, type UploadProgress } from "@/lib/api";
 import { rememberOriginal } from "@/lib/sessionOriginals";
 
 // Long-edge cap for the on-screen preview thumbnail. Camera JPEGs run
@@ -51,6 +51,8 @@ export interface UploadState {
   file: File | null;
   previewUrl: string | null;
   submitting: boolean;
+  /** Bytes sent so far while submitting; null otherwise. */
+  progress: UploadProgress | null;
   error: string | null;
   selectFile: (file: File) => void;
   /** Queue the analysis; resolves with its ID (null if it couldn't be queued). */
@@ -69,6 +71,7 @@ export function useImageUpload(): UploadState {
   const [file, setFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [progress, setProgress] = useState<UploadProgress | null>(null);
   const [error, setError] = useState<string | null>(null);
   // Tracks the most recently selected file so a slow-resolving thumbnail
   // from a stale selectFile call can't clobber a newer one.
@@ -101,9 +104,10 @@ export function useImageUpload(): UploadState {
   const submit = useCallback(async () => {
     if (!file || submitting) return null;
     setSubmitting(true);
+    setProgress({ sent: 0, total: file.size });
     setError(null);
     try {
-      const created = await createAnalysis(file);
+      const created = await createAnalysis(file, setProgress);
       // The preview URL now belongs to the session store (the report shows
       // it instantly); clear it here without revoking.
       rememberOriginal(created.id, file, previewUrl);
@@ -116,6 +120,7 @@ export function useImageUpload(): UploadState {
       return null;
     } finally {
       setSubmitting(false);
+      setProgress(null);
     }
   }, [file, previewUrl, submitting]);
 
@@ -127,5 +132,5 @@ export function useImageUpload(): UploadState {
     setError(null);
   }, [previewUrl]);
 
-  return { file, previewUrl, submitting, error, selectFile, submit, reset };
+  return { file, previewUrl, submitting, progress, error, selectFile, submit, reset };
 }

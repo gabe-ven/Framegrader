@@ -87,42 +87,83 @@ function isAbort(err: unknown): boolean {
   return err instanceof DOMException && err.name === "AbortError";
 }
 
+// For a request that never got a response at all — the server is down, the
+// connection dropped mid-flight, or DNS/CORS refused it. The browser's own
+// message for all of these is the bare "Failed to fetch", which tells the
+// user nothing about what to do.
+const UNREACHABLE =
+  "Couldn't reach the analysis server — it may be restarting or stopped. " +
+  "Check the backend is running, then try again.";
+
+/** The server's `detail` message from an error body, or a generic one. */
+function errorDetail(status: number, body: string): string {
+  try {
+    const data = JSON.parse(body);
+    if (typeof data?.detail === "string") return data.detail;
+  } catch {
+    // response had no JSON body; use the default message
+  }
+  return `Request failed (${status}).`;
+}
+
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   let res: Response;
   try {
     res = await fetch(apiUrl(path), { ...init, headers: authHeaders(init.headers) });
   } catch (err) {
     if (isAbort(err)) throw err;
-    // fetch only rejects when the request never got a response at all — the
-    // server is down, the connection dropped mid-flight, or DNS/CORS refused
-    // it. The browser's own message for all of these is the bare "Failed to
-    // fetch", which tells the user nothing about what to do.
-    throw new ApiError(
-      "Couldn't reach the analysis server — it may be restarting or stopped. " +
-        "Check the backend is running, then try again.",
-    );
+    throw new ApiError(UNREACHABLE);
   }
 
   if (!res.ok) {
-    let detail = `Request failed (${res.status}).`;
-    try {
-      const data = await res.json();
-      if (typeof data?.detail === "string") detail = data.detail;
-    } catch {
-      // response had no JSON body; keep the default message
-    }
-    throw new ApiError(detail, res.status);
+    const body = await res.text().catch(() => "");
+    throw new ApiError(errorDetail(res.status, body), res.status);
   }
 
   if (res.status === 204) return undefined as T;
   return res.json();
 }
 
-/** Upload a photo and queue its analysis. Resolves as soon as it is queued. */
-export async function createAnalysis(file: File): Promise<CreatedAnalysis> {
+export interface UploadProgress {
+  sent: number;
+  total: number;
+}
+
+/**
+ * Upload a photo and queue its analysis. Resolves as soon as it is queued.
+ *
+ * XMLHttpRequest rather than fetch: fetch has no upload progress events, and
+ * sending a full-size camera JPEG takes several seconds on a home connection
+ * (measured ~3.4 MB/s to the Render host) — long enough that a button with no
+ * progress on it reads as frozen.
+ */
+export function createAnalysis(
+  file: File,
+  onProgress?: (progress: UploadProgress) => void,
+): Promise<CreatedAnalysis> {
   const body = new FormData();
   body.append("file", file);
-  return request<CreatedAnalysis>("/api/analyses", { method: "POST", body });
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", apiUrl("/api/analyses"));
+    authHeaders().forEach((value, key) => xhr.setRequestHeader(key, value));
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable) onProgress?.({ sent: e.loaded, total: e.total });
+    };
+    xhr.onload = () => {
+      if (xhr.status < 200 || xhr.status >= 300) {
+        reject(new ApiError(errorDetail(xhr.status, xhr.responseText), xhr.status));
+        return;
+      }
+      try {
+        resolve(JSON.parse(xhr.responseText));
+      } catch {
+        reject(new ApiError(errorDetail(xhr.status, ""), xhr.status));
+      }
+    };
+    xhr.onerror = () => reject(new ApiError(UNREACHABLE));
+    xhr.send(body);
+  });
 }
 
 export function getAnalysis(id: string, signal?: AbortSignal): Promise<AnalysisSnapshot> {
