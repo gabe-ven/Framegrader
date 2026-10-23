@@ -1,10 +1,6 @@
 import { useCallback, useRef, useState } from "react";
-import { analyzeImage, generateAIAnalysis, requestColorGrade, validateFile } from "@/lib/api";
-import type { AIAnalysis, AnalysisResponse, ColorGradeResponse } from "@/types/analysis";
-
-type Status = "idle" | "loading" | "success" | "error";
-type AiStatus = "idle" | "loading" | "success" | "error";
-type ColorGradeStatus = "idle" | "loading" | "success" | "error";
+import { createAnalysis, validateFile } from "@/lib/api";
+import { rememberOriginal } from "@/lib/sessionOriginals";
 
 // Long-edge cap for the on-screen preview thumbnail. Camera JPEGs run
 // 15-25MP; decoding one at full resolution just to shrink it via CSS is
@@ -51,36 +47,29 @@ async function createPreviewThumbnail(file: File): Promise<string> {
   }
 }
 
-export interface ImageAnalysisState {
+export interface UploadState {
   file: File | null;
   previewUrl: string | null;
-  status: Status;
+  submitting: boolean;
   error: string | null;
-  result: AnalysisResponse | null;
-  aiStatus: AiStatus;
-  aiError: string | null;
-  ai: AIAnalysis | null;
-  colorGradeStatus: ColorGradeStatus;
-  colorGradeError: string | null;
-  colorGrade: ColorGradeResponse | null;
   selectFile: (file: File) => void;
-  analyze: () => Promise<void>;
-  fetchColorGrade: () => Promise<void>;
+  /** Queue the analysis; resolves with its ID (null if it couldn't be queued). */
+  submit: () => Promise<string | null>;
   reset: () => void;
 }
 
-export function useImageAnalysis(): ImageAnalysisState {
+/**
+ * Pick a photo, preview it, and queue it for analysis.
+ *
+ * Everything after the upload — progress, results, the critique — lives on
+ * the server and is read by ID (see features/analysis/useAnalysis.ts), so a
+ * refresh or a shared link shows the same thing this tab does.
+ */
+export function useImageUpload(): UploadState {
   const [file, setFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const [status, setStatus] = useState<Status>("idle");
+  const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [result, setResult] = useState<AnalysisResponse | null>(null);
-  const [aiStatus, setAiStatus] = useState<AiStatus>("idle");
-  const [aiError, setAiError] = useState<string | null>(null);
-  const [ai, setAi] = useState<AIAnalysis | null>(null);
-  const [colorGradeStatus, setColorGradeStatus] = useState<ColorGradeStatus>("idle");
-  const [colorGradeError, setColorGradeError] = useState<string | null>(null);
-  const [colorGrade, setColorGrade] = useState<ColorGradeResponse | null>(null);
   // Tracks the most recently selected file so a slow-resolving thumbnail
   // from a stale selectFile call can't clobber a newer one.
   const latestFileRef = useRef<File | null>(null);
@@ -90,22 +79,13 @@ export function useImageAnalysis(): ImageAnalysisState {
       const validationError = validateFile(next);
       if (validationError) {
         setError(validationError);
-        setStatus("error");
         return;
       }
       if (previewUrl) URL.revokeObjectURL(previewUrl);
       latestFileRef.current = next;
       setFile(next);
       setPreviewUrl(null);
-      setResult(null);
       setError(null);
-      setStatus("idle");
-      setAi(null);
-      setAiError(null);
-      setAiStatus("idle");
-      setColorGrade(null);
-      setColorGradeError(null);
-      setColorGradeStatus("idle");
 
       createPreviewThumbnail(next).then((url) => {
         if (latestFileRef.current === next) {
@@ -118,87 +98,34 @@ export function useImageAnalysis(): ImageAnalysisState {
     [previewUrl],
   );
 
-  const analyze = useCallback(async () => {
-    if (!file) return;
-    setStatus("loading");
+  const submit = useCallback(async () => {
+    if (!file || submitting) return null;
+    setSubmitting(true);
     setError(null);
-    setAi(null);
-    setAiError(null);
-    setAiStatus("idle");
-
-    let cvResult: AnalysisResponse;
     try {
-      cvResult = await analyzeImage(file);
-      setResult(cvResult);
-      setStatus("success");
+      const created = await createAnalysis(file);
+      // The preview URL now belongs to the session store (the report shows
+      // it instantly); clear it here without revoking.
+      rememberOriginal(created.id, file, previewUrl);
+      latestFileRef.current = null;
+      setFile(null);
+      setPreviewUrl(null);
+      return created.id;
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong.");
-      setStatus("error");
-      return;
+      return null;
+    } finally {
+      setSubmitting(false);
     }
-
-    // Kick off the slower AI critique once the CV metrics are in, grounding it
-    // in the analysis we just received. A failure here never affects the CV
-    // results already on screen.
-    setAiStatus("loading");
-    try {
-      const aiResult = await generateAIAnalysis(file, cvResult);
-      setAi(aiResult.ai);
-      setAiStatus("success");
-    } catch (err) {
-      setAiError(err instanceof Error ? err.message : "AI analysis failed.");
-      setAiStatus("error");
-    }
-  }, [file]);
-
-  const fetchColorGrade = useCallback(async () => {
-    if (!file || colorGradeStatus === "loading" || colorGradeStatus === "success") return;
-    setColorGradeStatus("loading");
-    setColorGradeError(null);
-    try {
-      const context = result
-        ? { ...result, scene_summary: ai?.scene?.summary ?? null }
-        : null;
-      const response = await requestColorGrade(file, context);
-      setColorGrade(response);
-      setColorGradeStatus("success");
-    } catch (err) {
-      setColorGradeError(err instanceof Error ? err.message : "Color grading failed.");
-      setColorGradeStatus("error");
-    }
-  }, [file, result, ai, colorGradeStatus]);
+  }, [file, previewUrl, submitting]);
 
   const reset = useCallback(() => {
     if (previewUrl) URL.revokeObjectURL(previewUrl);
     latestFileRef.current = null;
     setFile(null);
     setPreviewUrl(null);
-    setResult(null);
     setError(null);
-    setStatus("idle");
-    setAi(null);
-    setAiError(null);
-    setAiStatus("idle");
-    setColorGrade(null);
-    setColorGradeError(null);
-    setColorGradeStatus("idle");
   }, [previewUrl]);
 
-  return {
-    file,
-    previewUrl,
-    status,
-    error,
-    result,
-    aiStatus,
-    aiError,
-    ai,
-    colorGradeStatus,
-    colorGradeError,
-    colorGrade,
-    selectFile,
-    analyze,
-    fetchColorGrade,
-    reset,
-  };
+  return { file, previewUrl, submitting, error, selectFile, submit, reset };
 }

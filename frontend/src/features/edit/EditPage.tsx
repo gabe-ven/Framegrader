@@ -41,8 +41,10 @@ const BTN_RED = `${BTN_BASE} bg-red-500 text-white`;
 
 // Active compare mode is a stark fill, not a black slab, so which view you are
 // looking at is legible at a glance from across the panel.
-const ACTIVE_COMPARE_CLASS = `${BTN_YELLOW} px-4 py-2 text-xs`;
-const INACTIVE_COMPARE_CLASS = `${BTN_WHITE} px-4 py-2 text-xs`;
+// pointer-coarse:min-h-11 — the tabs are 40px tall, just under a reliable
+// touch target; mouse layouts keep the tighter row.
+const ACTIVE_COMPARE_CLASS = `${BTN_YELLOW} px-4 py-2 text-xs pointer-coarse:min-h-11`;
+const INACTIVE_COMPARE_CLASS = `${BTN_WHITE} px-4 py-2 text-xs pointer-coarse:min-h-11`;
 
 function clamp01(v: number): number {
   return Math.min(0.98, Math.max(0.02, v));
@@ -174,7 +176,8 @@ const EFFECTS_SLIDERS: SliderConfig[] = [
 ];
 
 interface EditPageProps {
-  file: File;
+  source: Blob;
+  fileName: string;
   histogram: Histogram | null;
   colorGrade: ColorGradeResponse | null;
   colorGradeStatus: "idle" | "loading" | "success" | "error";
@@ -184,7 +187,8 @@ interface EditPageProps {
 }
 
 export function EditPage({
-  file,
+  source,
+  fileName,
   histogram,
   colorGrade,
   colorGradeStatus,
@@ -297,7 +301,7 @@ export function EditPage({
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = editedFileName(file.name);
+      a.download = editedFileName(fileName);
       a.click();
       // Revoking synchronously right after click() races the browser's
       // download hand-off and can fail the download; defer it instead.
@@ -341,9 +345,19 @@ export function EditPage({
         {/* Sticky on wide screens: the control stack runs far taller than the
             photo, so pinning the image keeps it in view while you work the
             sliders instead of leaving a column of dead cream beside them.
-            self-start is required — a stretched grid item can't stick. */}
-        <div className="flex flex-col items-start gap-4 lg:sticky lg:top-8 lg:self-start">
-          <div className="flex flex-wrap items-center gap-3">
+            self-start is required — a stretched grid item can't stick.
+            Below lg the columns stack, so the same column becomes a sticky
+            header instead: without it the photo scrolls ~1500px out of view
+            by the time you reach Vignette, and you're adjusting blind. The
+            opaque background and bottom rule let the sliders scroll under it.
+            As a header it is a 2-column grid — compare tabs and Download
+            share the top row, the photo spans the second — because stacked
+            it took ~60% of a phone screen and left room for three sliders. */}
+        <div
+          data-testid="edit-photo-header"
+          className="flex flex-col items-start gap-4 max-lg:grid max-lg:grid-cols-[1fr_auto] max-lg:items-center max-lg:gap-3 max-lg:sticky max-lg:top-0 max-lg:z-20 max-lg:-mx-6 max-lg:border-b-4 max-lg:border-black max-lg:bg-bg max-lg:px-6 max-lg:py-3 lg:sticky lg:top-8 lg:self-start"
+        >
+          <div className="flex flex-wrap items-center gap-3 max-lg:col-start-1 max-lg:row-start-1">
             <div className="flex items-center gap-1.5">
               {COMPARE_MODES.map(({ key, label, mobileHidden }) => (
                 <button
@@ -355,7 +369,8 @@ export function EditPage({
                 </button>
               ))}
             </div>
-            <span className="font-mono text-[10px] font-black uppercase tracking-widest text-black">
+            {/* A keyboard shortcut: meaningless on a touch screen. */}
+            <span className="font-mono text-[10px] font-black uppercase tracking-widest text-black pointer-coarse:hidden">
               hold \ for before
             </span>
           </div>
@@ -365,11 +380,11 @@ export function EditPage({
               boxing a portrait crop inside a landscape card. */}
           <div
             ref={splitContainerRef}
-            className="relative inline-block w-fit max-w-full overflow-hidden border-4 border-black bg-white shadow-[12px_12px_0_0_#000]"
+            className="relative inline-block w-fit max-w-full overflow-hidden border-4 border-black bg-white shadow-[12px_12px_0_0_#000] max-lg:col-span-2 max-lg:row-start-2 max-lg:shadow-[6px_6px_0_0_#000]"
           >
             <EditCanvas
               ref={canvasRef}
-              file={file}
+              source={source}
               adjustments={adjustments}
               curveLut={curveLut}
               mode={displayMode}
@@ -389,11 +404,11 @@ export function EditPage({
               </div>
             )}
           </div>
-          <div className="flex flex-wrap items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3 max-lg:col-start-2 max-lg:row-start-1">
             <button
               onClick={handleDownload}
               disabled={exporting}
-              className={`${BTN_RED} px-10 py-4 text-xs`}
+              className={`${BTN_RED} px-10 py-4 text-xs max-lg:px-5 max-lg:py-2.5`}
             >
               {exporting ? "Exporting…" : "Download"}
             </button>

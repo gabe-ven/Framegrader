@@ -38,7 +38,7 @@ export function CompositionToggles({
 
   if (variant === "rows") {
     return (
-      <div className="flex flex-wrap gap-4">
+      <div className="flex flex-wrap gap-x-4 gap-y-4 pointer-coarse:gap-y-0">
         {toggleDefs.map((def) => {
           const active = toggles[def.key];
           const on = def.available && active;
@@ -48,7 +48,10 @@ export function CompositionToggles({
               type="button"
               disabled={!def.available}
               onClick={() => onToggle(def.key)}
-              className={`flex items-center gap-2 font-mono text-xs uppercase tracking-widest transition-colors ${
+              // On touch screens each row grows to a 44px target (the
+              // label alone is 16px tall — a reliable mis-tap); mouse
+              // layouts keep the compact list.
+              className={`flex items-center gap-2 font-mono text-xs uppercase tracking-widest transition-colors pointer-coarse:min-h-11 pointer-coarse:pr-2 ${
                 !def.available
                   ? "cursor-not-allowed text-subtle"
                   : active
@@ -81,7 +84,7 @@ export function CompositionToggles({
             whileHover={def.available ? { scale: 0.98 } : undefined}
             whileTap={def.available ? { scale: 0.95 } : undefined}
             transition={PILL_SPRING}
-            className={`flex items-center gap-2 border-2 px-3 py-1.5 font-mono text-[10px] uppercase tracking-wide transition-colors ${
+            className={`flex items-center gap-2 border-2 px-3 py-1.5 font-mono text-[10px] uppercase tracking-wide transition-colors pointer-coarse:min-h-11 ${
               !def.available
                 ? "cursor-not-allowed border-border text-subtle"
                 : active

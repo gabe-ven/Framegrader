@@ -7,7 +7,7 @@ here, so the contract grows without breaking existing clients.
 
 from __future__ import annotations
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class ImageInfo(BaseModel):
@@ -212,6 +212,23 @@ class CompositionInfo(BaseModel):
     negative_space: NegativeSpace
 
 
+class ScoreInfo(BaseModel):
+    """A 0-100 score plus how it was produced, so a client (or a sceptical
+    photographer) can tell a fitted model from a hand-weighted average."""
+
+    score: float | None = Field(..., description="0-100, or null when unavailable.")
+    method: str = Field(..., description="Which scorer produced it, e.g. a calibration model name.")
+    model: str | None = Field(default=None, description="Learned model behind it, if any.")
+    heuristic: float | None = Field(
+        default=None, description="The previous hand-weighted mean, kept for comparison."
+    )
+
+
+class Scores(BaseModel):
+    composition: ScoreInfo
+    aesthetic: ScoreInfo | None = None
+
+
 class AnalysisResponse(BaseModel):
     image: ImageInfo = Field(..., description="Basic metadata about the upload.")
     exif: ExifInfo = Field(..., description="Camera metadata extracted from EXIF.")
@@ -221,6 +238,11 @@ class AnalysisResponse(BaseModel):
     )
     recipe: FujifilmRecipe = Field(
         ..., description="Real in-camera Fujifilm recipe, read from MakerNotes."
+    )
+    scores: Scores | None = Field(
+        default=None,
+        description="Overall composition score (calibrated against human ratings) "
+        "and the learned aesthetic score.",
     )
 
 
@@ -255,6 +277,16 @@ class CameraSettings(BaseModel):
     focal_length: str | None = None
     from_exif: bool = False
     reasoning: str | None = None
+
+    @field_validator("aperture", "shutter_speed", "iso", "focal_length", mode="before")
+    @classmethod
+    def _numbers_as_text(cls, value: object) -> object:
+        # The prompt shows "e.g. 100", and a model answering with the bare
+        # number 640 instead of "640" is entirely normal. Strict str typing
+        # turned that into a validation error and a lost critique.
+        if isinstance(value, (int, float)) and not isinstance(value, bool):
+            return str(value)
+        return value
 
 
 class CompositionCritique(BaseModel):

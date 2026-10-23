@@ -111,7 +111,7 @@ export function ToneCurveEditor({ curve, onChange, histogram }: ToneCurveEditorP
           type: "circle",
           x: px,
           y: py,
-          shape: { cx: 0, cy: 0, r: 7 },
+          shape: { cx: 0, cy: 0, r: handleRadius() },
           style: { fill: "#facc15", stroke: "#000000", lineWidth: 3 },
           draggable: true,
           cursor: "ns-resize",
@@ -180,4 +180,11 @@ export function ToneCurveEditor({ curve, onChange, histogram }: ToneCurveEditorP
       </div>
     </div>
   );
+}
+
+/** Drag-handle radius: 7px suits a mouse; on touch screens a 14px circle was
+ * too small to grab, so it grows to roughly a fingertip (24px across). Read
+ * at positioning time so a device switching input modes picks it up. */
+function handleRadius(): number {
+  return typeof window !== "undefined" && window.matchMedia?.("(pointer: coarse)").matches ? 12 : 7;
 }

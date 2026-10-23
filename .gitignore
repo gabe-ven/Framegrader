@@ -34,3 +34,12 @@ eval/ground_truth.json
 .idea/
 .vscode/
 *.swp
+playwright-report/
+test-results/
+
+# Benchmark datasets (downloaded by eval/benchmark/fetch.py; never committed)
+eval/data/
+
+# Local SQLite database and exported model files
+backend/data/
+backend/models/

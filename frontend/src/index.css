@@ -124,3 +124,24 @@ input[type="range"].control-slider:focus-visible::-webkit-slider-thumb {
 input[type="range"].control-slider:focus-visible::-moz-range-thumb {
   background: #ef4444;
 }
+
+/* Touch screens: a 44px-tall hit area and a bigger thumb. The track is drawn
+   by the pseudo-elements, so the taller input doesn't change how it looks —
+   it just stops a thumb-sized finger from missing a 26px-tall strip and
+   scrolling the page instead. Mouse layouts keep the compact rows. */
+@media (pointer: coarse) {
+  input[type="range"].control-slider {
+    height: 44px;
+  }
+
+  input[type="range"].control-slider::-webkit-slider-thumb {
+    width: 28px;
+    height: 28px;
+    margin-top: -8px;
+  }
+
+  input[type="range"].control-slider::-moz-range-thumb {
+    width: 28px;
+    height: 28px;
+  }
+}

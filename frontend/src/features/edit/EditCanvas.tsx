@@ -15,7 +15,9 @@ export interface EditCanvasHandle {
 export type CompareMode = "before" | "after" | "split";
 
 interface EditCanvasProps {
-  file: File;
+  /** The photo to edit: the original File when this tab uploaded it,
+   * otherwise the server's stored copy. */
+  source: Blob;
   adjustments: GradingAdjustments;
   /** Optional per-channel tone-curve LUT, layered on top of `adjustments`. */
   curveLut?: Uint8ClampedArray | null;
@@ -25,7 +27,7 @@ interface EditCanvasProps {
 }
 
 export const EditCanvas = forwardRef<EditCanvasHandle, EditCanvasProps>(function EditCanvas(
-  { file, adjustments, curveLut, mode, splitPosition },
+  { source, adjustments, curveLut, mode, splitPosition },
   ref,
 ) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -80,7 +82,7 @@ export const EditCanvas = forwardRef<EditCanvasHandle, EditCanvasProps>(function
   // source into an offscreen buffer.
   useEffect(() => {
     let cancelled = false;
-    const url = URL.createObjectURL(file);
+    const url = URL.createObjectURL(source);
     const img = new Image();
     img.onload = () => {
       if (cancelled) return;
@@ -110,8 +112,8 @@ export const EditCanvas = forwardRef<EditCanvasHandle, EditCanvasProps>(function
       cancelled = true;
       URL.revokeObjectURL(url);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [file]);
+     
+  }, [source]);
 
   // Redraw on adjustment or compare-mode change, batched to one paint per
   // frame so dragging a slider (or the split divider) stays smooth.
@@ -121,7 +123,7 @@ export const EditCanvas = forwardRef<EditCanvasHandle, EditCanvasProps>(function
     return () => {
       if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [adjustments, curveLut, mode, splitPosition]);
 
   useImperativeHandle(
@@ -152,5 +154,7 @@ export const EditCanvas = forwardRef<EditCanvasHandle, EditCanvasProps>(function
     [],
   );
 
-  return <canvas ref={canvasRef} className="block max-h-[520px] w-auto max-w-full" />;
+  // 32vh below lg, where the photo is a sticky header above the sliders and
+  // must leave at least half the screen for them.
+  return <canvas ref={canvasRef} className="block max-h-[520px] w-auto max-w-full max-lg:max-h-[32vh]" />;
 });

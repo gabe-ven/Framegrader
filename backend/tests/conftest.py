@@ -53,3 +53,33 @@ def _unpaused_ai(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     get_settings.cache_clear()
     yield
     get_settings.cache_clear()
+
+
+@pytest.fixture(autouse=True)
+def _isolated_database(tmp_path, monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
+    """Give every test an empty database and no embedded workers.
+
+    SQLite by default: a fresh file per test. Set TEST_DATABASE_URL to run the
+    suite against Postgres instead (CI does), where the job queue takes its
+    FOR UPDATE SKIP LOCKED path; the tables are dropped and recreated around
+    each test so nothing leaks between them.
+
+    The engine is created lazily, so tests that never touch persistence pay
+    nothing. Workers are off so a test decides exactly when jobs run (see
+    `run_jobs` in test_jobs.py) instead of racing a background thread.
+    """
+    import os
+
+    from app.db.engine import get_engine, reset_engines
+    from app.db.schema import metadata
+
+    url = os.environ.get("TEST_DATABASE_URL") or f"sqlite:///{(tmp_path / 'test.db').as_posix()}"
+    monkeypatch.setenv("DATABASE_URL", url)
+    monkeypatch.setenv("EMBEDDED_WORKERS", "0")
+    get_settings.cache_clear()
+    reset_engines()
+    if not url.startswith("sqlite"):
+        metadata.drop_all(get_engine())
+        metadata.create_all(get_engine())
+    yield
+    reset_engines()

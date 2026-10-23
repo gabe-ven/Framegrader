@@ -35,9 +35,15 @@ npm install
 npm run dev                     # http://localhost:5173
 
 # Tests
-backend/.venv/bin/python -m pytest backend/tests/
+backend/.venv/bin/python -m pytest backend/tests/   # backend (SQLite; TEST_DATABASE_URL=postgres… for Postgres)
+cd frontend && npm run lint && npm run typecheck && npm test   # lint, types, unit tests
+cd frontend && npx playwright install chromium && npm run test:e2e   # upload → results → edit → download
 
-# Eval harness (accuracy vs. your own judgment on real photos)
+# Public benchmark (HLW / DUTS / CADB / KonIQ) — see eval/README.md
+pip install -r backend/requirements.lock -r eval/requirements.txt
+cd eval && python -m benchmark.fetch && python -m benchmark.run
+
+# Personal eval harness (accuracy vs. your own judgment on real photos)
 cp eval/ground_truth.example.json eval/ground_truth.json  # fill in judgments
 # drop JPEGs into eval/photos/ (gitignored), then:
 backend/.venv/bin/python eval/run_eval.py
@@ -47,6 +53,13 @@ Notes: YOLO-World weights (~25 MB) auto-download on first use, and both the mode
 and its predictor are warmed in a background thread at startup — so the first
 analysis runs at normal speed rather than paying a cold-start penalty. Without
 `ANTHROPIC_API_KEY` the VLM tier is silently skipped.
+
+Analyses are queued, not computed inside the request: `POST /api/analyses`
+answers `202` immediately and a worker thread inside the same process does the
+work, publishing stage-by-stage progress over Server-Sent Events. History and
+share links live in `backend/data/framegrader.db` (SQLite) unless
+`DATABASE_URL` points at Postgres. See [docs/architecture.md](docs/architecture.md)
+for the queue design and why it is a SQL table rather than RQ/Celery/arq.
 
 **Install from `requirements.lock`, not `requirements.txt`.** The former pins every
 transitive dependency; the latter pins only direct ones and re-resolves the rest on
@@ -146,6 +159,20 @@ The image installs from the lock, bakes the detector weights in at build time, u
 CPU-only torch (the default CUDA wheels add ~2 GB for a GPU it will never see), and
 runs as a non-root user with a `/health` healthcheck.
 
+Persistence and background jobs:
+
+- **Set `DATABASE_URL` to a Postgres database for anything you want to keep.**
+  The default SQLite file sits on the container's disk, and Render's free disk
+  is wiped on every deploy — history and share links would go with it.
+- **Set `SECRET_KEY`** (render.yaml generates one) so image links signed before
+  a restart or on another replica stay valid.
+- Jobs run in `EMBEDDED_WORKERS` threads inside the API process (default 1). To
+  run them separately, set `EMBEDDED_WORKERS=0` on the API and start
+  `python -m app.worker` processes against the same Postgres database.
+- Logs: `LOG_FORMAT=json` for one object per line, with `request_id`, `job_id`,
+  `analysis_id` and per-stage `duration_ms` as fields. Every response carries
+  `X-Request-ID`; the synchronous endpoints also send `Server-Timing`.
+
 Two things to get right in front of it:
 
 - **Set `FORWARDED_ALLOW_IPS` to your proxy's address.** Per-IP rate limiting reads
@@ -207,11 +234,14 @@ share an origin behind one reverse proxy.
   busy patterns inflate edge density; strong repeating structure can read as
   intentional symmetry.
 - A low rule-of-thirds score isn't necessarily bad composition — centered symmetric
-  shots break the rule by design. The overall score excludes non-applicable axes
-  (no horizon, no lines) but is still a heuristic average, not a taste model.
-- Accuracy against real photographer judgment is tracked with the harness in
-  `eval/`, but the labeled set is small and personal — **not yet comprehensively
-  validated**. Treat scores as conversation starters, not verdicts.
+  shots break the rule by design. The overall composition score is now a model
+  fitted to expert ratings on CADB rather than a hand-weighted average, but
+  composition is hard to score from geometry: see the measured correlations in
+  [eval/results/RESULTS.md](eval/results/RESULTS.md) before reading much into
+  one number.
+- Accuracy is measured on public benchmarks (DUTS-TE, CADB, KonIQ-10k) by
+  `eval/benchmark/`. Horizon accuracy on HLW is not yet measured: that dataset
+  is only available on request from its authors.
 
 ## Repository layout
 
@@ -219,7 +249,7 @@ share an origin behind one reverse proxy.
 ai-photography/
 ├── backend/     # FastAPI service: CV pipeline, subject localization, EXIF
 ├── frontend/    # React SPA: upload UI + analysis report with overlays
-├── eval/        # Accuracy harness: your judgments vs. pipeline output
+├── eval/        # Public benchmark (benchmark/, results/) + personal judgment harness
 ├── scripts/     # smoke_test_subject.py — manual subject-locator inspection
 └── README.md
 ```

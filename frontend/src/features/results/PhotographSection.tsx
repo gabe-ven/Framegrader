@@ -16,7 +16,7 @@ interface Dimensions {
 }
 
 interface PhotographSectionProps {
-  file: File;
+  fileName: string;
   previewUrl: string | null;
   exif: ExifInfo | null;
   composition: CompositionInfo | null;
@@ -32,7 +32,7 @@ interface PhotographSectionProps {
  * summary, live composition-overlay toggles drawn directly on the photo, and
  * the choose-another/edit actions. */
 export function PhotographSection({
-  file,
+  fileName,
   previewUrl,
   exif,
   composition,
@@ -116,7 +116,10 @@ export function PhotographSection({
     <div className="flex flex-col gap-8">
       <div className="relative left-1/2 h-1 w-screen -translate-x-1/2 bg-black" />
 
-      <div className="grid grid-cols-5 gap-8">
+      {/* Side by side from lg up; stacked below it. At phone width a 3/2
+          column split left the photo — the subject of the whole page — at
+          ~170px wide next to an info column too narrow for its own buttons. */}
+      <div className="grid grid-cols-1 gap-8 lg:grid-cols-5">
         {/* Photo — left, dominant. Shown uncropped (object-contain) and
             top-aligned with the info column, so its top edge lines up with
             the camera-name heading instead of floating in whatever leftover
@@ -131,14 +134,17 @@ export function PhotographSection({
             scrolling. The overlay SVG fills this same shrink-wrapped box
             (absolute inset-0, so it doesn't affect the fit-content sizing),
             keeping it pixel-aligned with the photo at any size. */}
-        <div className="col-span-3">
+        <div className="min-w-0 lg:col-span-3">
           {/* The border/shadow live on this outer wrapper, not the image
               itself: the composition overlay is pixel-aligned to the inner
               div's own box (see its comment above), so anything that would
               change the image's rendered content box — like a border
               directly on the <img> — would throw that alignment off by the
               border's width. Wrapping it keeps the inner box untouched. */}
-          <div className="w-fit border-4 border-black bg-white p-2 shadow-[10px_10px_0_0_#000]">
+          {/* max-w-full + a smaller offset shadow on narrow screens: the
+              10px shadow sits outside the box, and at full width it would
+              push the page into sideways scrolling. */}
+          <div className="w-fit max-w-full border-4 border-black bg-white p-2 shadow-[6px_6px_0_0_#000] sm:shadow-[10px_10px_0_0_#000]">
             <div className="relative w-fit overflow-hidden bg-bg">
               {previewUrl ? (
                 <motion.img
@@ -147,7 +153,7 @@ export function PhotographSection({
                   animate={{ scale: 1, opacity: 1 }}
                   transition={{ layout: CARD_SPRING, default: PHOTO_ENTRANCE_SPRING }}
                   src={previewUrl}
-                  alt={file.name}
+                  alt={fileName}
                   draggable={false}
                   onLoad={(e) =>
                     handleLoad(e.currentTarget.naturalWidth, e.currentTarget.naturalHeight)
@@ -175,10 +181,10 @@ export function PhotographSection({
             default cross-axis stretch) so the button row can be pinned to
             the bottom, flush with the photo's bottom edge, while the data
             cards stack tightly at the top. */}
-        <div className="col-span-2 flex h-full w-full flex-col justify-between">
+        <div className="flex h-full w-full min-w-0 flex-col justify-between lg:col-span-2">
           <div className="w-full space-y-6">
             <h2 className="w-full font-sans text-2xl font-semibold text-text">
-              {cameraName(exif, file.name)}
+              {cameraName(exif, fileName)}
             </h2>
 
             {showDataTabs && (
@@ -187,7 +193,7 @@ export function PhotographSection({
                   <button
                     type="button"
                     onClick={() => setActiveTab("exif")}
-                    className={`flex-1 border-r-4 border-black px-4 py-3 font-mono text-xs font-black uppercase tracking-widest transition-colors ${
+                    className={`flex-1 border-r-4 border-black px-4 py-3 pointer-coarse:min-h-11 font-mono text-xs font-black uppercase tracking-widest transition-colors ${
                       activeTab === "exif" ? "bg-yellow-400 text-black" : "bg-white text-subtle hover:text-text"
                     }`}
                   >
@@ -196,7 +202,7 @@ export function PhotographSection({
                   <button
                     type="button"
                     onClick={() => setActiveTab("recipe")}
-                    className={`flex-1 px-4 py-3 font-mono text-xs font-black uppercase tracking-widest transition-colors ${
+                    className={`flex-1 px-4 py-3 pointer-coarse:min-h-11 font-mono text-xs font-black uppercase tracking-widest transition-colors ${
                       activeTab === "recipe" ? "bg-yellow-400 text-black" : "bg-white text-subtle hover:text-text"
                     }`}
                   >

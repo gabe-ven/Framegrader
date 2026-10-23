@@ -6,8 +6,12 @@ analyzer over it. No AI — purely geometric/structural measurements.
 
 from __future__ import annotations
 
+from collections.abc import Callable
+
 import numpy as np
 from PIL import Image
+
+from app.core.observability import stage
 
 from app.services.composition.edge_density import compute_edge_density
 from app.services.composition.horizon_detection import detect_horizon
@@ -24,7 +28,16 @@ from app.services.composition.symmetry import analyze_symmetry
 _ANALYSIS_MAX_EDGE = 1920
 
 
-def run_composition_analysis(image: Image.Image) -> dict:
+def run_composition_analysis(
+    image: Image.Image, on_stage: Callable[[str], None] | None = None
+) -> dict:
+    """Run every composition metric.
+
+    ``on_stage`` is called with ``"subject"`` before subject localization and
+    ``"composition"`` before the geometric metrics — the two halves with very
+    different costs (localization can include a multi-second VLM call), which
+    the job worker reports as separate progress stages.
+    """
     # Downsample to analysis resolution if needed. Track original dimensions
     # so pixel-space outputs (leading lines) can be scaled back before returning.
     orig_w, orig_h = image.size
@@ -41,17 +54,23 @@ def run_composition_analysis(image: Image.Image) -> dict:
 
     # Locate the subject once and share it across the metrics that depend on
     # "where the subject is" (rule of thirds, subject position, negative space).
-    subject = locate_subject(rgb)
+    if on_stage:
+        on_stage("subject")
+    with stage("subject"):
+        subject = locate_subject(rgb)
 
-    result = {
-        "rule_of_thirds": analyze_rule_of_thirds(gray, subject),
-        "leading_lines": detect_leading_lines(gray, subject),
-        "horizon": detect_horizon(gray),
-        "symmetry": analyze_symmetry(gray),
-        "subject_position": estimate_subject_position(gray, subject),
-        "edge_density": compute_edge_density(gray),
-        "negative_space": estimate_negative_space(gray, subject),
-    }
+    if on_stage:
+        on_stage("composition")
+    with stage("composition"):
+        result = {
+            "rule_of_thirds": analyze_rule_of_thirds(gray, subject),
+            "leading_lines": detect_leading_lines(gray, subject),
+            "horizon": detect_horizon(gray),
+            "symmetry": analyze_symmetry(gray),
+            "subject_position": estimate_subject_position(gray, subject),
+            "edge_density": compute_edge_density(gray),
+            "negative_space": estimate_negative_space(gray, subject),
+        }
 
     # Leading-line coordinates come out in analysis-resolution pixel space.
     # Normalize them to 0-1, matching every other spatial field in this API

@@ -42,7 +42,7 @@
 
 ## Phase 4 — Photography Assistant
 
-- [ ] Fujifilm recipe recommendations
+- [x] Fujifilm recipe recommendations (read from MakerNotes)
 - [ ] Lightroom recommendations
 - [ ] Similar image search
 - [ ] Shooting tips
@@ -52,6 +52,14 @@
 ## Phase 5 — Platform
 
 - [ ] Authentication
-- [ ] Saved analyses
+- [x] Saved analyses (per-browser history)
 - [ ] User gallery
-- [ ] Sharing
+- [x] Sharing (public /r/:id links)
+---
+
+## Phase 6 — Measurement quality
+
+- [x] Public benchmark (DUTS-TE, CADB, KonIQ-10k) with committed results
+- [ ] HLW horizon benchmark (blocked: HLW is available only on request from its authors)
+- [x] Composition score calibrated against expert ratings (CADB)
+- [x] Learned aesthetic model, served via ONNX

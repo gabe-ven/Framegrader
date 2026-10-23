@@ -10,6 +10,7 @@ from slowapi.errors import RateLimitExceeded
 
 from app.core.config import get_settings
 from app.core.logging import configure_logging
+from app.core.observability import RequestContextMiddleware
 from app.core.rate_limit import limiter, rate_limit_exceeded_handler
 
 logger = logging.getLogger(__name__)
@@ -71,18 +72,37 @@ async def lifespan(app: FastAPI):
     # Safe only because /health is async and therefore never competes for a
     # thread; if it were sync, a full pool would stall it and undo the whole
     # point of running the handlers off the event loop.
-    concurrency = _resolve_analysis_concurrency(get_settings().analysis_concurrency)
+    settings = get_settings()
+    concurrency = _resolve_analysis_concurrency(settings.analysis_concurrency)
     to_thread.current_default_thread_limiter().total_tokens = concurrency
     logger.info("Analysis threadpool limited to %d concurrent requests.", concurrency)
 
     threading.Thread(target=_warm_models, daemon=True, name="model-warmup").start()
-    yield
+
+    # Background jobs (AI critique, color grade). Embedded by default: on a
+    # single small instance a separate worker process would double the
+    # baseline memory for nothing. EMBEDDED_WORKERS=0 hands the queue to
+    # `python -m app.worker` processes instead.
+    from app.db.engine import get_engine
+    from app.jobs.worker import Worker
+
+    get_engine()  # create tables now, not inside the first request
+    worker = None
+    if settings.embedded_workers > 0:
+        worker = Worker(threads=settings.embedded_workers)
+        worker.maintain()  # recover jobs orphaned by the previous process
+        worker.start()
+    try:
+        yield
+    finally:
+        if worker is not None:
+            worker.stop(timeout=10)
 
 
 def create_app() -> FastAPI:
     settings = get_settings()
     # Before anything else, so warnings raised during startup are visible.
-    configure_logging(settings.log_level)
+    configure_logging(settings.log_level, settings.log_format)
     app = FastAPI(title=settings.app_name, version="0.1.0", lifespan=lifespan)
 
     # slowapi reads the limiter off app.state, and the handler turns its
@@ -95,7 +115,13 @@ def create_app() -> FastAPI:
         allow_origins=settings.allowed_origins_list,
         allow_methods=["*"],
         allow_headers=["*"],
+        # Readable from browser JS, so a user's bug report can quote the ID
+        # that finds every log line for their request.
+        expose_headers=["X-Request-ID", "Server-Timing", "Location"],
     )
+    # Added last so it is outermost: the request ID is bound before CORS and
+    # routing run, and the summary line sees the final status code.
+    app.add_middleware(RequestContextMiddleware)
 
     # Deliberately async: this does no blocking work, so it belongs on the
     # event loop. As a sync handler it would need a thread from the capped
@@ -106,9 +132,10 @@ def create_app() -> FastAPI:
     async def health() -> dict[str, str]:
         return {"status": "ok", "app": settings.app_name}
 
-    from app.api.routes import analysis
+    from app.api.routes import analyses, analysis
 
     app.include_router(analysis.router, prefix="/api")
+    app.include_router(analyses.router, prefix="/api")
 
     return app
 
