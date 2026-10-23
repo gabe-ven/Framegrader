@@ -2,7 +2,9 @@ import { AnimatePresence, animate, motion, useMotionValue } from "framer-motion"
 import { useEffect, useRef } from "react";
 import { useNavigate } from "react-router";
 import { PhotoSkeleton } from "@/components/Shimmer";
+import type { UploadProgress } from "@/lib/api";
 import { CARD_SPRING } from "@/lib/motionVariants";
+import { useStalled } from "@/lib/useStalled";
 import { HeroSection } from "./HeroSection";
 import { useImageUpload } from "./useImageUpload";
 
@@ -12,8 +14,12 @@ import { useImageUpload } from "./useImageUpload";
  * shared link all land on a real page.
  */
 export function UploadPanel() {
-  const { file, previewUrl, submitting, error, selectFile, submit, reset } = useImageUpload();
+  const { file, previewUrl, submitting, progress, error, selectFile, submit, reset } =
+    useImageUpload();
   const navigate = useNavigate();
+  // 6s with no upload progress (or no answer once fully sent) is far longer
+  // than a healthy server takes; on the free plan it means a cold start.
+  const stalled = useStalled(progress?.sent, submitting, 6000);
 
   // The hero's headline-slide + card-dealing entrance is a first-impression
   // flourish. Once a file has been selected once, "Choose another" returns
@@ -77,7 +83,7 @@ export function UploadPanel() {
             </p>
           )}
           <div className="flex flex-wrap justify-center gap-4 px-6">
-            <AnalyzeButton onClick={onAnalyze} busy={submitting} />
+            <AnalyzeButton onClick={onAnalyze} busy={submitting} progress={progress} />
             <button
               onClick={reset}
               disabled={submitting}
@@ -86,6 +92,15 @@ export function UploadPanel() {
               Choose another
             </button>
           </div>
+          {stalled && (
+            <p
+              role="status"
+              className="mx-6 max-w-md text-center font-mono text-xs font-bold text-black"
+            >
+              Waiting on the server. It sleeps when nobody has used it for a while,
+              and the first upload after that can take up to a minute.
+            </p>
+          )}
         </motion.div>
       )}
     </AnimatePresence>
@@ -94,7 +109,22 @@ export function UploadPanel() {
 
 const ARROW_SPRING = { type: "spring" as const, stiffness: 500, damping: 30 };
 
-function AnalyzeButton({ onClick, busy }: { onClick: () => void; busy: boolean }) {
+/** "Uploading 42%" while bytes go out; "Starting…" once they're all sent. */
+function busyLabel(progress: UploadProgress | null): string {
+  if (!progress || progress.total <= 0) return "Uploading…";
+  if (progress.sent >= progress.total) return "Starting…";
+  return `Uploading ${Math.floor((progress.sent / progress.total) * 100)}%`;
+}
+
+function AnalyzeButton({
+  onClick,
+  busy,
+  progress,
+}: {
+  onClick: () => void;
+  busy: boolean;
+  progress: UploadProgress | null;
+}) {
   const arrowX = useMotionValue(0);
 
   return (
@@ -105,7 +135,9 @@ function AnalyzeButton({ onClick, busy }: { onClick: () => void; busy: boolean }
       onHoverEnd={() => animate(arrowX, 0, ARROW_SPRING)}
       className="border-4 border-black bg-red-500 px-10 py-4 font-sans text-sm font-black uppercase tracking-tight text-white shadow-[8px_8px_0_0_#000] transition-transform hover:translate-x-1 hover:translate-y-1 hover:shadow-[4px_4px_0_0_#000] active:translate-x-2 active:translate-y-2 active:shadow-none disabled:opacity-60"
     >
-      {busy ? "Uploading…" : "Analyze"}{" "}
+      {/* tabular-nums: the percentage changes many times a second, and
+          proportional digits would make the button jitter in width. */}
+      <span className="tabular-nums">{busy ? busyLabel(progress) : "Analyze"}</span>{" "}
       <motion.span className="inline-block" style={{ x: arrowX }}>
         →
       </motion.span>
